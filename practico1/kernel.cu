@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <iostream>
 #include "util.h"
+
 using namespace std;
 
 //Kernel
@@ -32,27 +33,24 @@ __global__ void MatrixSumKernel_2(int M, float* A_dev, float* SumPar_dev) {
 	if (index < M){
 		int offset = index* M;
 		int k = 0;
-		for(; k< M;k++){
+		for (; k< M;k++) {
 			tmpValue = tmpValue + A_dev[offset + k];
-			printf("OFFSET: %d :::: K: %d :::: A_dev %f\n",offset,k,A_dev[offset + k]); 
 		}
 		SumPar_dev[index] = tmpValue;
 	}
 
 }
 
-// EJERCICIO 2
+// Ejericio 2
 __global__ void SumaColMatrizKernel2(int M, float* A_dev, float* SumPar_dev){
 
 	/*
-
-	se asume que
-	int chunk = 32;
-	dim3 tamGrid(1, N); //Grid dimensión, N bloques
-	dim3 tamBlock(chunk,1,1); //Block dimensión
-	for(int i =0; i<CANT_REPETICIONES ; i++)
-	SumaColMatrizKernel<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
-
+		se asume que
+		int chunk = 32;
+		dim3 tamGrid(1, N); //Grid dimensión, N bloques
+		dim3 tamBlock(chunk,1,1); //Block dimensión
+		for(int i =0; i<CANT_REPETICIONES ; i++)
+		SumaColMatrizKernel<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
 	*/
 
 	float tmpValue = 0;
@@ -60,7 +58,7 @@ __global__ void SumaColMatrizKernel2(int M, float* A_dev, float* SumPar_dev){
 	int start = blockIdx.y * M + threadIdx.x * size;
 	int end = start + size;
 	int k = start;
-	for (; k < end; k++){
+	for (; k < end; k++) {
 		tmpValue = tmpValue + A_dev[k];
 	}
 
@@ -68,40 +66,34 @@ __global__ void SumaColMatrizKernel2(int M, float* A_dev, float* SumPar_dev){
 
 }
 
-// EJERCICIO 3, Parte A
+// Ejecicio 3.a
 __global__ void SumaColMatrizKernel3A(int M,float* A_dev, float* SumPar_dev){
-	// M = filas
-
-	/*
-
-	se asume que
-	int chunk = 32;
-	dim3 tamGrid(1, N); //Grid dimensión, N bloques
-	dim3 tamBlock(chunk,1,1); //Block dimensión
-	for(int i =0; i<CANT_REPETICIONES ; i++)
-	SumaColMatrizKernel<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
-	x
 	
+	/*
+		se asume que
+		int chunk = 32;
+		dim3 tamGrid(1, N); //Grid dimensión, N bloques
+		dim3 tamBlock(chunk,1,1); //Block dimensión
+		for(int i =0; i<CANT_REPETICIONES ; i++)
+		SumaColMatrizKernel<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
+		x
 	*/
 
 	float tmpValue = 0;
 	int columna = blockIdx.y * M;
 	int chunk2 = 1;//blockDim.x;
 	
-	
-	//printf(" threadIdx.x: %i , top: %i", threadIdx.x, top);
-
 	//  Coalesced 
 	for (int i = 0; i < chunk2; i++) {
 		tmpValue = tmpValue + A_dev[ columna + threadIdx.x + i*chunk2 ];
-		printf("Thread: %d :::: i: %d :::: Indice: %d :::: m: %d :::: BlockIdx.y: %d :::: A_dev: %f\n",threadIdx.x,i,columna + threadIdx.x + i*chunk2,M,blockIdx.y, A_dev[ columna + threadIdx.x + i*chunk2 ] );  
 	}
 
 	atomicAdd( &( SumPar_dev[ blockIdx.y ] ), tmpValue );
 	
 }
-// EJERCICIO 3, Parte b
-__global__ void SumaColMatrizKernel3(int M,float* A_dev, float* SumPar_dev){
+
+// Ejercicio 3.b
+__global__ void SumaColMatrizKernel3B(int M,float* A_dev, float* SumPar_dev){
 	// M = filas
 
 	/*
@@ -135,8 +127,7 @@ __global__ void SumaColMatrizKernel3(int M,float* A_dev, float* SumPar_dev){
 
 
 //extern "C"
-float sumaColMatriz(int M, int N, float * A_hst, int algoritmo){
-
+float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 
 	size_t size = M * N * sizeof(float);
 	size_t size2 = N*sizeof(float);
@@ -158,90 +149,71 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo){
 	clockStart();
 
 	switch(algoritmo) {
-	case 1: {
-
-		//Configurar la grilla
-		dim3 tamGrid (1, 1); //Grid dimensi? 1x1, Tiene un bloque de ejecucion
-		dim3 tamBlock(1, N); //Block dimensi? 1 x N, Hay N threads por bloque, threadId.x = 0, threadId.y esta en [0 .. N -1]
-
-		for(int i = 0; i < CANT_REPETICIONES; i++)
-			MatrixSumKernel_1<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
-
-		break;
-
-	}
-	case 2: { // EJERCICIO 1
-		int threadsSize = 1024; // DESVENTAJA: Threads sin utilizar, hacer chequeos extras
-		dim3 tamGrid( (N / threadsSize ) + N % threadsSize == 0 ?  0 : 1, 1);
-
-		// dispongo bloques horizontalmente
-		dim3 tamBlock( threadsSize,  1);
-			   // dispongo threads horizontalmente
-
-			   for(int i = 0; i < CANT_REPETICIONES; i++)
-				   MatrixSumKernel_2<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
-
-			   break;
-
-
-	}
-	case 3:{ // EJERCICIO 2
-
-		//printf("\n\nNo implementadoooooo!! :)\n\n\n");
-
-		// configuración de la ejecución
-		int newChunk = 32;
-		dim3 tamGrid(1, N); //Grid dimensión, N bloques
-		dim3 tamBlock(newChunk,1,1); //Block dimensión
-
-		// lanzamiento del kernel
-		for(int i = 0; i < CANT_REPETICIONES; i++) {
-			SumaColMatrizKernel2<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
-		}
-		//...
-
-		break;
-
-	}
-	case 4: { // EJERCICIO 3.a
-
-		int newChunk = 4;
-		dim3 tamGrid(1, N); //Grid dimensión, N bloques
-		dim3 tamBlock(newChunk,1,1); //Block dimensión
 		
-		// lanzamiento del kernel
-		for (int i = 0; i < CANT_REPETICIONES; i++){
-			SumaColMatrizKernel3A<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
+		case 1: {
+
+			//Configurar la grilla
+			dim3 tamGrid (1, 1); //Grid dimensi? 1x1, Tiene un bloque de ejecucion
+			dim3 tamBlock(1, N); //Block dimensi? 1 x N, Hay N threads por bloque, threadId.x = 0, threadId.y esta en [0 .. N -1]
+
+			for(int i = 0; i < CANT_REPETICIONES; i++)
+				MatrixSumKernel_1<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
+
+			break;
 		}
-			   
+		case 2: { // Ejercicio 1
+			int threadsSize = 1024; // DESVENTAJA: Threads sin utilizar, hacer chequeos extras
+			dim3 tamGrid( (N / threadsSize ) + N % threadsSize == 0 ?  0 : 1, 1);
 
-			   break;
+			// dispongo bloques horizontalmente
+			dim3 tamBlock( threadsSize,  1);
+			
+			// dispongo threads horizontalmente
+			for(int i = 0; i < CANT_REPETICIONES; i++)
+				MatrixSumKernel_2<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
+			
+			break;
+		}
+		case 3: { // Ejercicio 2
+			
+			//printf("\n\nNo implementadoooooo!! :)\n\n\n");
 
-			}
+			// configuración de la ejecución
+			int newChunk = 32;
+			dim3 tamGrid(1, N); //Grid dimensión, N bloques
+			dim3 tamBlock(newChunk,1,1); //Block dimensión
 
-				   case 5: { // EJERCICIO 3.a
+			// lanzamiento del kernel
+			for(int i = 0; i < CANT_REPETICIONES; i++) 
+				SumaColMatrizKernel2<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
+			
+			break;
+		}
+		case 4: { // Ejercicio 3.a
 
-			   int newChunk = 2;
-			   dim3 tamGrid(M / newChunk, N/ newChunk); //Grid dimensión, N bloques
-			   dim3 tamBlock(newChunk,1,1); //Block dimensión
-			   // lanzamiento del kernel
+			int newChunk = 4;
+			dim3 tamGrid(1, N); //Grid dimensión, N bloques
+			dim3 tamBlock(newChunk,1,1); //Block dimensión
+		
+			// lanzamiento del kernel
+			for (int i = 0; i < CANT_REPETICIONES; i++)
+				SumaColMatrizKernel3A<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
+		
+			break;
+		}
+		case 5: { // Ejercicio 3.b
 
-
-			   for(int i =0; i<CANT_REPETICIONES ; i++){
-				   SumaColMatrizKernel3<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
-			   }
-			   
-
-			   break;
-
-			}
-
-
+			int newChunk = 2;
+			dim3 tamGrid(M / newChunk, N/ newChunk); //Grid dimensión, N bloques
+			dim3 tamBlock(newChunk,1,1); //Block dimensión
+		
+			// lanzamiento del kernel
+			for (int i =0; i<CANT_REPETICIONES ; i++)
+				SumaColMatrizKernel3B<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
+		
+			break;
+		}
 	}
-
-	
-	//print_matrix(A_hst,M);
-
 
 	cudaDeviceSynchronize();
 	clockStop("kernel");
@@ -256,6 +228,7 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo){
 	total = sum_matrix(SumPar_hst,N);
 
 	free(SumPar_hst);
+
 	// Free matrices en device
 	cudaFree(A_dev); cudaFree(SumPar_dev);
 
@@ -265,14 +238,14 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo){
 }
 
 
-int main(int argc, char** argv){
+int main(int argc, char** argv) {
 
-	if (argc < 3){
+	if (argc < 3) {
 		printf("Uso:\nMatSum n algo(1:3)");
 		exit(0);
 	}
 
-	int n= atoi(argv[1]);
+	int n = atoi(argv[1]);
 	int algo = atoi(argv[2]);
 
 	float *A = (float *)malloc(n*n*sizeof(float));
@@ -282,8 +255,6 @@ int main(int argc, char** argv){
 	clockStart();
 	float result_ref = sum_matrix(A,n,n);
 	clockStop("CPU");
-
-	printf("algo - %i \n",algo);
 
 	float result_gpu = sumaColMatriz(n,n,A,algo);
 
