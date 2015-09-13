@@ -18,6 +18,7 @@
 #define MASK_SIZE 7
 
 
+
 // Declaramos la memoria constante
 __constant__ int mask_dev[MASK_SIZE];
 
@@ -37,16 +38,49 @@ void cudaCheck()
 
 __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask, int arraySize, int maskSize){
 
+	
+	 __shared__ int elements[ CHUNK + 2*(int)(MASK_SIZE/2) ];
 	int start = blockDim.x * blockIdx.x  + threadIdx.x,
+		radio = (int)maskSize / 2,
 		i = 0,
-		maskInd = 0,
-		radio = (int)maskSize / 2;
-	//printf("start %d , end %d \n", start - radio, start + radio);
+		j =0,
+		maskInd = 0	;
+	
+	// me cargo lo que corresponde
+	elements[ threadIdx.x + radio] = inputArray[start];
+	if (threadIdx.x == 0 ){
+		for(i = 0 ; i < radio; i++){
+			if ( start == 0 ){
+				printf("1 > \n");
+				elements[i] = 0 ;
+			}else{
+				printf("2 > \n");
+				elements[ i ] = inputArray[start - radio + i ];
+			}
+		}
+		printf("start %d  \n", start);
+	}
+	
+	if (threadIdx.x == blockDim.x - 1 ){
+		for(i = CHUNK ; i < CHUNK + radio; i++){
+			if (start == SIZE_X-1 ){
+				elements[i] = 0;
+			}else{
+				elements[i] = inputArray[CHUNK + j];
+			}
+			j++;
+		}
+		
+	}
+
+	__syncthreads();
+	
+	
+	printf("start %d , element[start] %d\n", start, elements[start]);
 
 	for (i =start - radio; i <= (start + radio); i++) {
-		if (i >= 0 && i < arraySize ) {                    
-			outputArray[start] += inputArray[i] * mask[maskInd] ;
-		}
+		                   
+		outputArray[start] += elements[i] * mask[maskInd] ;
 		maskInd++;
 	}
 }
@@ -144,14 +178,14 @@ int main() {
 
 	// chequear salida...
 	for(i = 0; i < SIZE_X; i++){
-				
+			printf("%d :: %d \n",outputArray_CPU[i],outputArray_GPU[i]);	
 		if (outputArray_CPU[i] != outputArray_GPU[i]){
 			printf("outputArray_CPU[%d] != outputArray_GPU[%d] \n",i,i);
 			break;
 		}
 	}	
 
-	printf("OK !!" );
+	if (i == SIZE_X -1 )	printf("OK !!" );
 
 	// liberar memoria cpu...
 	free(inputArray);
@@ -165,7 +199,7 @@ int main() {
 	//cudaFree(outputArray_GPU);
 	//cudaFree(mask_dev);
 
-	//char enter = getchar();
+	char enter = getchar();
 
 	return 0;
 }
