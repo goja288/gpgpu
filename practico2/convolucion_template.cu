@@ -9,7 +9,7 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 64
+#define CHUNK 1024
 #define SIZE_X 1048576
 #define MASK_SIZE 7
 
