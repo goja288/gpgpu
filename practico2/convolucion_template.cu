@@ -9,8 +9,8 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 16
-#define SIZE_X 2048
+#define CHUNK 3
+#define SIZE_X 9
 #define MASK_SIZE 3
 
 
@@ -30,20 +30,18 @@ void cudaCheck()
 
 __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask, int arraySize, int maskSize){
 
-	int i = 0,
-		j = 0,
-		position,
+	int start = blockDim.x * blockIdx.x  + threadIdx.x,
+		i = 0,
+		maskInd = 0,
 		radio = (int)maskSize / 2;
+	//printf("start %d , end %d \n", start - radio, start + radio);
 
-	for (i = - radio; i < (threadIdx.x + radio); i++) {
+	for (i =start - radio; i <= (start + radio); i++) {
 		if (i >= 0 && i < arraySize ) {                    
-			if (blockIdx.x == 1 && threadIdx.x == 1) {
-				printf("El primer hilo suma en el indice [%d * %d + %d] * mask[%d + %d]",blockDim.x,blockIdx.x,threadIdx.x,i,i,maskSize);
-			}
-			outputArray[blockDim.x * blockIdx.x  + threadIdx.x] += inputArray[blockDim.x * blockIdx.x  + threadIdx.x + i] * mask[i + maskSize];
+			outputArray[start] += inputArray[i] * mask[maskInd] ;
 		}
+		maskInd++;
 	}
-
 }
 
 __global__ void Kernel_Convolucion_Constante(int * inputArray, int* outputArray){
@@ -87,16 +85,14 @@ int main() {
 	float t_i, t_f, t_sys, diff;
 
 	// memoria para arrays en dispositivo
-	inputArray_dev = (int*)malloc(sizeof(int) * SIZE_X);
-	outputArray_dev = (int*)malloc(sizeof(int) * SIZE_X);
-	mask_dev = (int*)malloc(sizeof(int) * MASK_SIZE);
-
+	cudaMalloc(&inputArray_dev, sizeof(int)*SIZE_X);
+	cudaMalloc(&outputArray_dev, sizeof(int) * SIZE_X);
+	cudaMalloc(&mask_dev, sizeof(int) * MASK_SIZE);
 
 	cudaCheck();
 
 	for (i = 0; i < SIZE_X; i++){
-		inputArray[i] = i % 10;
-		inputArray_dev[i] = i % 10;
+		inputArray[i] = 1;
 		outputArray_CPU[i] = 0;
 		outputArray_GPU[i] = 0;
 		//	outputArray_dev[i] = 0; // ????
@@ -114,9 +110,9 @@ int main() {
 	clockStop("CPU");
 
 	// copiar array de entrada al dispositivo...
-	cudaMemcpy(inputArray_dev, inputArray, SIZE_X, cudaMemcpyHostToDevice);
-	cudaMemcpy(outputArray_dev, outputArray_GPU, SIZE_X, cudaMemcpyHostToDevice);
-	cudaMemcpy(mask_dev, mask, MASK_SIZE, cudaMemcpyHostToDevice);
+	cudaMemcpy(inputArray_dev, inputArray,  sizeof(int) *SIZE_X, cudaMemcpyHostToDevice);
+	cudaMemcpy(outputArray_dev, outputArray_GPU,  sizeof(int) *SIZE_X, cudaMemcpyHostToDevice);
+	cudaMemcpy(mask_dev, mask, sizeof(int) * MASK_SIZE, cudaMemcpyHostToDevice);
 
 	// setear en 0 el array de salida en el dispositivo...
 	// ...
@@ -135,7 +131,7 @@ int main() {
 	clockStop("GPU");
  
 	// copiar array de salida desde el dispositivo...
-	cudaMemcpy(outputArray_GPU,outputArray_dev,SIZE_X,cudaMemcpyDeviceToHost);
+	cudaMemcpy(outputArray_GPU,outputArray_dev,sizeof(int) *SIZE_X,cudaMemcpyDeviceToHost);
 
 	// chequear salida...
 	for(i = 0; i < SIZE_X; i++){
@@ -158,6 +154,8 @@ int main() {
 	cudaFree(outputArray_dev);
 	//cudaFree(outputArray_GPU);
 	cudaFree(mask_dev);
+
+	char enter = getchar();
 
 	return 0;
 }
