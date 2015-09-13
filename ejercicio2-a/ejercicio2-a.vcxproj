@@ -153,7 +153,13 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="kernel.cu" />
+    <CudaCompile Include="convolucion_template.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\practico2\util.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\practico2\util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

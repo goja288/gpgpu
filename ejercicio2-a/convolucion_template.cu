@@ -1,3 +1,7 @@
+/*******************/
+/** Ejercicio 2 a **/
+/*******************/
+
 #include <cuda.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +17,9 @@
 #define SIZE_X 1048576
 #define MASK_SIZE 7
 
+
+// Declaramos la memoria constante
+__constant__ int mask_dev[MASK_SIZE];
 
 void cudaCheck()
 {
@@ -71,7 +78,7 @@ int main() {
 	int* inputArray = (int*)malloc(sizeof(int) * SIZE_X);
 	int* outputArray_CPU = (int*)malloc(sizeof(int) * SIZE_X);
 	int* outputArray_GPU = (int*)malloc(sizeof(int) * SIZE_X);
-	int* mask = (int*)malloc(sizeof(int) * MASK_SIZE);
+	int* mask = (int*)malloc(sizeof(int) * MASK_SIZE); 
 
 	int i;
 
@@ -80,14 +87,14 @@ int main() {
 	// arrays en el device
 	int * inputArray_dev;
 	int * outputArray_dev;	
-	int* mask_dev;	
+	//int* mask_dev;	
 
 	float t_i, t_f, t_sys, diff;
 
 	// memoria para arrays en dispositivo
 	cudaMalloc(&inputArray_dev, sizeof(int)*SIZE_X);
 	cudaMalloc(&outputArray_dev, sizeof(int) * SIZE_X);
-	cudaMalloc(&mask_dev, sizeof(int) * MASK_SIZE);
+//	cudaMalloc(&mask_dev, sizeof(int) * MASK_SIZE);
 
 	cudaCheck();
 
@@ -112,7 +119,7 @@ int main() {
 	// copiar array de entrada al dispositivo...
 	cudaMemcpy(inputArray_dev, inputArray,  sizeof(int) *SIZE_X, cudaMemcpyHostToDevice);
 	cudaMemcpy(outputArray_dev, outputArray_GPU,  sizeof(int) *SIZE_X, cudaMemcpyHostToDevice);
-	cudaMemcpy(mask_dev, mask, sizeof(int) * MASK_SIZE, cudaMemcpyHostToDevice);
+	//cudaMemcpy(mask_dev, mask, sizeof(int) * MASK_SIZE, cudaMemcpyHostToDevice);
 
 	// setear en 0 el array de salida en el dispositivo...
 	// ...
@@ -121,6 +128,8 @@ int main() {
 
 	// copiar la máscara o setear la máscara en memoria constante (cudaMemcpyToSymbol)
 	// ...
+	cudaMemcpyToSymbol(mask_dev, mask, sizeof(int) * MASK_SIZE);
+
 
 	int cantBloques = SIZE_X / CHUNK;
 	int tamBloque = CHUNK;
@@ -154,9 +163,9 @@ int main() {
 	cudaFree(inputArray_dev);
 	cudaFree(outputArray_dev);
 	//cudaFree(outputArray_GPU);
-	cudaFree(mask_dev);
+	//cudaFree(mask_dev);
 
-	char enter = getchar();
+	//char enter = getchar();
 
 	return 0;
 }
