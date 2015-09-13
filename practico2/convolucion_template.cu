@@ -9,9 +9,9 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 3
-#define SIZE_X 9
-#define MASK_SIZE 3
+#define CHUNK 64
+#define SIZE_X 1048576
+#define MASK_SIZE 7
 
 
 void cudaCheck()
@@ -92,7 +92,7 @@ int main() {
 	cudaCheck();
 
 	for (i = 0; i < SIZE_X; i++){
-		inputArray[i] = 1;
+		inputArray[i] = i % 10;
 		outputArray_CPU[i] = 0;
 		outputArray_GPU[i] = 0;
 		//	outputArray_dev[i] = 0; // ????
@@ -135,13 +135,14 @@ int main() {
 
 	// chequear salida...
 	for(i = 0; i < SIZE_X; i++){
-		printf("Joaco se la : %d ::: %d \n", outputArray_CPU[i],  outputArray_GPU[i]);
-		
+				
 		if (outputArray_CPU[i] != outputArray_GPU[i]){
 			printf("outputArray_CPU[%d] != outputArray_GPU[%d] \n",i,i);
 			break;
 		}
 	}	
+
+	printf("OK !!" );
 
 	// liberar memoria cpu...
 	free(inputArray);
