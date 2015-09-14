@@ -13,9 +13,9 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 1024
-#define SIZE_X 1048576
-#define MASK_SIZE 7
+#define CHUNK 3
+#define SIZE_X 6
+#define MASK_SIZE 3
 
 
 
@@ -40,48 +40,43 @@ __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask
 
 	
 	 __shared__ int elements[ CHUNK + 2*(int)(MASK_SIZE/2) ];
+
 	int start = blockDim.x * blockIdx.x  + threadIdx.x,
 		radio = (int)maskSize / 2,
 		i = 0,
 		j =0,
 		maskInd = 0	;
-	
-	// me cargo lo que corresponde
+
 	elements[ threadIdx.x + radio] = inputArray[start];
+
 	if (threadIdx.x == 0 ){
 		for(i = 0 ; i < radio; i++){
 			if ( start == 0 ){
-				printf("1 > \n");
 				elements[i] = 0 ;
 			}else{
-				printf("2 > \n");
 				elements[ i ] = inputArray[start - radio + i ];
 			}
 		}
-		printf("start %d  \n", start);
 	}
 	
-	if (threadIdx.x == blockDim.x - 1 ){
-		for(i = CHUNK ; i < CHUNK + radio; i++){
-			if (start == SIZE_X-1 ){
-				elements[i] = 0;
+	if (threadIdx.x == CHUNK - 1 ){
+		for(i = 0 ; i < radio; i++){
+			if (start < SIZE_X-1 ){
+				elements[CHUNK + i+1] = inputArray[start + i+1 ];
 			}else{
-				elements[i] = inputArray[CHUNK + j];
+				elements[CHUNK  + i+1] = 0;
 			}
-			j++;
+			
 		}
-		
 	}
-
 	__syncthreads();
 	
+	int centro = threadIdx.x + radio,
+		min = centro - radio,
+		max = centro + radio;
 	
-	printf("start %d , element[start] %d\n", start, elements[start]);
-
-	for (i =start - radio; i <= (start + radio); i++) {
-		                   
-		outputArray[start] += elements[i] * mask[maskInd] ;
-		maskInd++;
+	for(i = min ; i <= max; i++){
+		outputArray[start] += elements[ i ] ;
 	}
 }
 
@@ -128,21 +123,18 @@ int main() {
 	// memoria para arrays en dispositivo
 	cudaMalloc(&inputArray_dev, sizeof(int)*SIZE_X);
 	cudaMalloc(&outputArray_dev, sizeof(int) * SIZE_X);
-//	cudaMalloc(&mask_dev, sizeof(int) * MASK_SIZE);
 
 	cudaCheck();
 
 	for (i = 0; i < SIZE_X; i++){
-		inputArray[i] = i % 10;
+		inputArray[i] = 1;
 		outputArray_CPU[i] = 0;
 		outputArray_GPU[i] = 0;
-		//	outputArray_dev[i] = 0; // ????
 	}		
 
 	//definir una máscara...
 	for (i = 0; i < MASK_SIZE; i++) {
 		mask[i] = 1;
-		//	mask_dev[i] = 1; // ?????
 	}
 
 	// Convolución en CPU...	
@@ -167,6 +159,8 @@ int main() {
 
 	int cantBloques = SIZE_X / CHUNK;
 	int tamBloque = CHUNK;
+
+	
 
 	clockStart();
 	Kernel_Convolucion<<<cantBloques, tamBloque>>>(inputArray_dev, outputArray_dev, mask_dev, SIZE_X, MASK_SIZE);
