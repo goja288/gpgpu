@@ -13,10 +13,9 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 3
-#define SIZE_X 6
+#define CHUNK 5
+#define SIZE_X 10
 #define MASK_SIZE 3
-
 
 
 // Declaramos la memoria constante
@@ -39,45 +38,71 @@ void cudaCheck()
 __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask, int arraySize, int maskSize){
 
 	
-	 __shared__ int elements[ CHUNK + 2*(int)(MASK_SIZE/2) ];
+	__shared__ int elements[ CHUNK + 2*(int)(MASK_SIZE/2) ];
 
 	int start = blockDim.x * blockIdx.x  + threadIdx.x,
-		radio = (int)maskSize / 2,
+		radio = (int)(maskSize / 2),
 		i = 0,
 		j =0,
 		maskInd = 0	;
 
 	elements[ threadIdx.x + radio] = inputArray[start];
 
+	//printf("blockid %d, element %d \n", blockIdx.x, elements[ threadIdx.x + radio]);
+	//printf("%d #### \n", inputArray[start ]);
 	if (threadIdx.x == 0 ){
-		for(i = 0 ; i < radio; i++){
-			if ( start == 0 ){
-				elements[i] = 0 ;
-			}else{
+		
+		if(start == 0 ){
+			for(i = 0 ; i < radio; i++){
+				elements[i] = 0 ;	
+				__syncthreads();
+				//printf("blockid %d, element %d \n", blockIdx.x, elements[ i ]);
+			}
+		}else{
+			for(i = 0 ; i < radio; i++){
 				elements[ i ] = inputArray[start - radio + i ];
+				__syncthreads();
+				//printf("blockid %d, element %d \n", blockIdx.x, elements[ i]);
 			}
 		}
-	}
-	
-	if (threadIdx.x == CHUNK - 1 ){
-		for(i = 0 ; i < radio; i++){
-			if (start < SIZE_X-1 ){
-				elements[CHUNK + i+1] = inputArray[start + i+1 ];
-			}else{
-				elements[CHUNK  + i+1] = 0;
+		
+	}else if(threadIdx.x == CHUNK - 1){
+		if (start == SIZE_X - 1 ){
+			for(i =1; i<= radio; i++){
+				elements[CHUNK + i ] = 0;
+				__syncthreads();
+				printf("pepe   %d \n", CHUNK + i  );
+				//printf("3 - blockid %d, element %d \n", blockIdx.x, elements[ CHUNK + i]);
 			}
-			
+		}else{
+			for(i =0 ; i< radio; i++){
+				elements[CHUNK + i] = inputArray[start + 1 + i ];
+				
+				__syncthreads();
+				//printf("blockid %d, element %d \n", blockIdx.x, elements[ CHUNK + i]);
+			}
 		}
+		
 	}
 	__syncthreads();
 	
+	
+	
 	int centro = threadIdx.x + radio,
 		min = centro - radio,
-		max = centro + radio;
+		max = centro + radio,
+		ac = 0	;
 	
-	for(i = min ; i <= max; i++){
-		outputArray[start] += elements[ i ] ;
+	for(i = threadIdx.x ; i <= threadIdx.x + 2*radio; i++){
+		
+		ac+= elements[ i ] ;
+		printf("$$$  %d    %d    %d\n", elements[i], i, start );
+		
 	}
+
+	outputArray[start] = ac;
+
+	//printf(" >> %d   %d   %d  %d \n", min, max, start, ac );
 }
 
 __global__ void Kernel_Convolucion_Constante(int * inputArray, int* outputArray){
