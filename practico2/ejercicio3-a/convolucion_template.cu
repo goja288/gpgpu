@@ -13,9 +13,9 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 5
-#define SIZE_X 10
-#define MASK_SIZE 3
+#define CHUNK 8
+#define SIZE_X 32
+#define MASK_SIZE 5
 
 
 // Declaramos la memoria constante
@@ -35,16 +35,18 @@ void cudaCheck()
 // declarar máscara en memoria constante...
 // ...
 
-__global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask, int arraySize, int maskSize){
+__global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask){
 
 	
 	__shared__ int elements[ CHUNK + 2*(int)(MASK_SIZE/2) ];
 
 	int start = blockDim.x * blockIdx.x  + threadIdx.x,
-		radio = (int)(maskSize / 2),
+		radio = (int)(MASK_SIZE / 2),
 		i = 0,
 		j =0,
 		maskInd = 0	;
+
+	printf("%d radio\n", radio );
 
 	elements[ threadIdx.x + radio] = inputArray[start];
 
@@ -55,30 +57,29 @@ __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask
 		if(start == 0 ){
 			for(i = 0 ; i < radio; i++){
 				elements[i] = 0 ;	
-				__syncthreads();
 				//printf("blockid %d, element %d \n", blockIdx.x, elements[ i ]);
 			}
+			
 		}else{
 			for(i = 0 ; i < radio; i++){
 				elements[ i ] = inputArray[start - radio + i ];
-				__syncthreads();
 				//printf("blockid %d, element %d \n", blockIdx.x, elements[ i]);
 			}
 		}
 		
 	}else if(threadIdx.x == CHUNK - 1){
 		if (start == SIZE_X - 1 ){
-			for(i =1; i<= radio; i++){
+			for(i =0; i< radio; i++){
 				elements[CHUNK + i ] = 0;
-				__syncthreads();
-				printf("pepe   %d \n", CHUNK + i  );
+				
+				//printf("pepe   %d \n", CHUNK + i  );
 				//printf("3 - blockid %d, element %d \n", blockIdx.x, elements[ CHUNK + i]);
 			}
 		}else{
+			
 			for(i =0 ; i< radio; i++){
-				elements[CHUNK + i] = inputArray[start + 1 + i ];
+				elements[blockDim.x + i] = inputArray[start  + i ];
 				
-				__syncthreads();
 				//printf("blockid %d, element %d \n", blockIdx.x, elements[ CHUNK + i]);
 			}
 		}
@@ -188,7 +189,8 @@ int main() {
 	
 
 	clockStart();
-	Kernel_Convolucion<<<cantBloques, tamBloque>>>(inputArray_dev, outputArray_dev, mask_dev, SIZE_X, MASK_SIZE);
+	Kernel_Convolucion<<<cantBloques, tamBloque>>>(inputArray_dev, outputArray_dev, mask_dev);
+	cudaCheck();
 	cudaDeviceSynchronize();
 	clockStop("GPU");
  
