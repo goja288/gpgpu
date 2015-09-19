@@ -32,10 +32,10 @@ float sum_matrix(const float *M, int m, int n){
 
 	float sum = 0.0;
     float c = 0.0;
-	for (int i = 0 ; i < m; i++ ){
+/*	for (int i = 0 ; i < m; i++ ){
 		printf("%f , ", M[ i ] );
 	}
-
+	*/
     for (int i = 0 ; i < m*n ; i++ ){
         float y = M[i] - c ;    
         float t = sum + y;       // sum es grande e y es chico. Al aumentar el exp. de y pierdo los bits menos sig de la mantisa.
@@ -55,6 +55,6 @@ void clean_matrix(double *M, int width){
 
 void init_matrix(float *M, int width){
 	
-	for (int i = 0; i<width*width; i++)	M[i]= i;//rand()%100;
+	for (int i = 0; i<width*width; i++)	M[i]= 1;//rand()%100;
 	
 }

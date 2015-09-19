@@ -25,19 +25,21 @@ __global__ void MatrixSumKernel_1(int M, float* A_dev, float* SumPar_dev){
 
 }
 
+// Ejercicio 1
 __global__ void MatrixSumKernel_2(int M, float* A_dev, float* SumPar_dev) {
 
 	float tmpValue = 0;
 	int index = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (index < M){
-		int offset = index* M;
-		int k = 0;
-		for (; k< M;k++) {
-			tmpValue = tmpValue + A_dev[offset + k];
-		}
-		SumPar_dev[index] = tmpValue;
+
+	int offset = index* M;
+	int k = 0;
+
+	for (; k< M;k++) {
+		tmpValue+= A_dev[offset + k];
 	}
+	SumPar_dev[index] = tmpValue;
+	
 
 }
 
@@ -81,11 +83,11 @@ __global__ void SumaColMatrizKernel3A(int M,float* A_dev, float* SumPar_dev){
 
 	float tmpValue = 0;
 	int columna = blockIdx.y * M;
-	int chunk2 = 1;//blockDim.x;
+	int chunk2 = gridDim.y / blockDim.x ;//blockDim.x;
 	
 	//  Coalesced 
 	for (int i = 0; i < chunk2; i++) {
-		tmpValue = tmpValue + A_dev[ columna + threadIdx.x + i*chunk2 ];
+		tmpValue += A_dev[ columna + threadIdx.x + i*chunk2 ];
 	}
 
 	atomicAdd( &( SumPar_dev[ blockIdx.y ] ), tmpValue );
@@ -94,33 +96,20 @@ __global__ void SumaColMatrizKernel3A(int M,float* A_dev, float* SumPar_dev){
 
 // Ejercicio 3.b
 __global__ void SumaColMatrizKernel3B(int M,float* A_dev, float* SumPar_dev){
-	// M = filas
-
-	/*
-
-	int chunk = 2;
-	dim3 tamGrid(M/chunk, N/chunk); //Grid dimensión
-	dim3 tamBlock(chunk,1,1); //Block dimensión
-	// lanzamiento del kernel
-	for(int i =0; i<CANT_REPETICIONES ; i++)
-	SumaColMatrizKernel<<<tamGrid, tamBlock>>>(M, Md, Nd);
-
-	4 * 4 , -> 2.x2 , 4 bloques
-
-	*/
 
 	float tmpValue = 0;
 
-	int start =  gridDim.x * blockIdx.x * M + threadIdx.x * M + blockIdx.y*2;
-	int end = start + 2;
+	int start =  blockDim.x * blockIdx.x  + threadIdx.x * M + blockIdx.y*blockDim.x;
+	int end = start + blockDim.x;
 	
 	for(int k = start; k < end ; k++){
 		tmpValue = tmpValue + A_dev[k];
+		
 	}
+	
+	
+	atomicAdd( &( SumPar_dev[  blockDim.x * blockIdx.x  + threadIdx.x  ] ), tmpValue );
 
-	printf("value %f \n", tmpValue);
-
-	atomicAdd( &( SumPar_dev[ blockDim.x * blockIdx.x + threadIdx.x ] ), tmpValue );
 }
 
 
@@ -150,7 +139,7 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 
 	switch(algoritmo) {
 		
-		case 1: {
+		case 1: {// ejemplo dado
 
 			//Configurar la grilla
 			dim3 tamGrid (1, 1); //Grid dimensi? 1x1, Tiene un bloque de ejecucion
@@ -162,15 +151,15 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 			break;
 		}
 		case 2: { // Ejercicio 1
-			int threadsSize = 1024; // DESVENTAJA: Threads sin utilizar, hacer chequeos extras
-			dim3 tamGrid( (N / threadsSize ) + N % threadsSize == 0 ?  0 : 1, 1);
+			int _chunk2 = 32; // DESVENTAJA: Threads sin utilizar, hacer chequeos extras
+			dim3 tamGrid( (int)( N / _chunk2)  , 1);
 
 			// dispongo bloques horizontalmente
-			dim3 tamBlock( threadsSize,  1);
+			dim3 tamBlock( _chunk2,  1);
 			
 			// dispongo threads horizontalmente
 			for(int i = 0; i < CANT_REPETICIONES; i++)
-				MatrixSumKernel_2<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
+				MatrixSumKernel_2<<<tamGrid, tamBlock>>>(N, A_dev, SumPar_dev);
 			
 			break;
 		}
@@ -187,11 +176,13 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 			for(int i = 0; i < CANT_REPETICIONES; i++) 
 				SumaColMatrizKernel2<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
 			
+
+			
 			break;
 		}
 		case 4: { // Ejercicio 3.a
 
-			int newChunk = 4;
+			int newChunk = 32;
 			dim3 tamGrid(1, N); //Grid dimensión, N bloques
 			dim3 tamBlock(newChunk,1,1); //Block dimensión
 		
@@ -203,8 +194,8 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 		}
 		case 5: { // Ejercicio 3.b
 
-			int newChunk = 2;
-			dim3 tamGrid(M / newChunk, N/ newChunk); //Grid dimensión, N bloques
+			int newChunk = 32;
+			dim3 tamGrid(  (int) (M / newChunk), (int) (M / newChunk) ); //Grid dimensión, N bloques
 			dim3 tamBlock(newChunk,1,1); //Block dimensión
 		
 			// lanzamiento del kernel
