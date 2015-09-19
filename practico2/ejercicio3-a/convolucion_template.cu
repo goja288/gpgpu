@@ -38,54 +38,57 @@ void cudaCheck()
 __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask){
 
 	
+	// El tamaño de los elementos es chunk(cantidad de hilos) mas el el radio por dos (al comienzo como al final)
 	__shared__ int elements[ CHUNK + 2*(int)(MASK_SIZE/2) ];
 
-	int start = blockDim.x * blockIdx.x  + threadIdx.x,
-		radio = (int)(MASK_SIZE / 2),
-		i = 0,
-		j =0,
-		maskInd = 0	;
+	int start	= blockDim.x * blockIdx.x  + threadIdx.x,
+		radio	= (int)(MASK_SIZE / 2),
+		i		= 0,
+		j		= 0,
+		maskInd = 0;
 
-	printf("%d radio\n", radio );
+	//printf("%d radio\n", radio );
 
-	elements[ threadIdx.x + radio] = inputArray[start];
+	elements[threadIdx.x + radio] = inputArray[start];
 
 	//printf("blockid %d, element %d \n", blockIdx.x, elements[ threadIdx.x + radio]);
 	//printf("%d #### \n", inputArray[start ]);
-	if (threadIdx.x == 0 ){
+	if (threadIdx.x == 0 ) {
 		
-		if(start == 0 ){
-			for(i = 0 ; i < radio; i++){
+		if (start == 0 ) {
+			for (i = 0 ; i < radio; i++) {
 				elements[i] = 0 ;	
 				//printf("blockid %d, element %d \n", blockIdx.x, elements[ i ]);
 			}
 			
-		}else{
+		} else {
 			for(i = 0 ; i < radio; i++){
 				elements[ i ] = inputArray[start - radio + i ];
 				//printf("blockid %d, element %d \n", blockIdx.x, elements[ i]);
 			}
 		}
 		
-	}else if(threadIdx.x == CHUNK - 1){
-		if (start == SIZE_X - 1 ){
-			for(i =0; i< radio; i++){
-				elements[CHUNK + i ] = 0;
+	} 
+	else if (threadIdx.x == CHUNK - 1) {
+		
+		if (start == SIZE_X - 1 ){ // Soy el ultimo elemento del array de entrada?
+			for (i = 0; i < radio; i++){
+				elements[CHUNK + radio + i ] = 0;
 				
 				//printf("pepe   %d \n", CHUNK + i  );
 				//printf("3 - blockid %d, element %d \n", blockIdx.x, elements[ CHUNK + i]);
 			}
-		}else{
-			
-			for(i =0 ; i< radio; i++){
-				elements[blockDim.x + i] = inputArray[start  + i ];
+		} else { 	
+			// Soy el ultimo elemento del bloque
+			for (i = 0; i < radio; i++) {
+				elements[blockDim.x + radio + i ] = inputArray[start + i + 1];
 				
 				//printf("blockid %d, element %d \n", blockIdx.x, elements[ CHUNK + i]);
 			}
 		}
 		
 	}
-	__syncthreads();
+	__syncthreads(); 
 	
 	
 	
@@ -97,7 +100,7 @@ __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask
 	for(i = threadIdx.x ; i <= threadIdx.x + 2*radio; i++){
 		
 		ac+= elements[ i ] ;
-		printf("$$$  %d    %d    %d\n", elements[i], i, start );
+		//printf("$$$  %d    %d    %d\n", elements[i], i, start );
 		
 	}
 
@@ -199,14 +202,14 @@ int main() {
 
 	// chequear salida...
 	for(i = 0; i < SIZE_X; i++){
-			printf("%d :: %d \n",outputArray_CPU[i],outputArray_GPU[i]);	
+		//	printf("%d :: %d \n",outputArray_CPU[i],outputArray_GPU[i]);	
 		if (outputArray_CPU[i] != outputArray_GPU[i]){
 			printf("outputArray_CPU[%d] != outputArray_GPU[%d] \n",i,i);
 			break;
 		}
 	}	
 
-	if (i == SIZE_X -1 )	printf("OK !!" );
+	// if (i == SIZE_X -1 )	printf("OK !!" );
 
 	// liberar memoria cpu...
 	free(inputArray);
