@@ -1,3 +1,7 @@
+/*******************/
+/** Ejercicio 1 a **/
+/*******************/
+
 #include <cuda.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +13,7 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 1024
+#define CHUNK 1024	
 #define SIZE_X 1048576
 #define MASK_SIZE 7
 
@@ -156,7 +160,6 @@ int main() {
 	//cudaFree(outputArray_GPU);
 	cudaFree(mask_dev);
 
-	char enter = getchar();
-
 	return 0;
 }
+

@@ -1,5 +1,5 @@
 /*******************/
-/** Ejercicio 2 a **/
+/** Ejercicio 3 a **/
 /*******************/
 
 #include <cuda.h>
@@ -13,13 +13,9 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 8
-#define SIZE_X 32
-#define MASK_SIZE 5
-
-
-// Declaramos la memoria constante
-__constant__ int mask_dev[MASK_SIZE];
+#define CHUNK 256
+#define SIZE_X 1048576
+#define MASK_SIZE 21
 
 void cudaCheck()
 {
@@ -37,8 +33,14 @@ void cudaCheck()
 
 __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask){
 
+}
+
+__global__ void Kernel_Convolucion_Constante(int * inputArray, int* outputArray){
+
+}
+
+__global__ void Kernel_Convolucion_Shared(int * inputArray, int* outputArray, int* mask){
 	
-	// El tamaño de los elementos es chunk(cantidad de hilos) mas el el radio por dos (al comienzo como al final)
 	__shared__ int elements[ CHUNK + 2*(int)(MASK_SIZE/2) ];
 
 	int start	= blockDim.x * blockIdx.x  + threadIdx.x,
@@ -47,24 +49,18 @@ __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask
 		j		= 0,
 		maskInd = 0;
 
-	//printf("%d radio\n", radio );
-
 	elements[threadIdx.x + radio] = inputArray[start];
 
-	//printf("blockid %d, element %d \n", blockIdx.x, elements[ threadIdx.x + radio]);
-	//printf("%d #### \n", inputArray[start ]);
 	if (threadIdx.x == 0 ) {
 		
 		if (start == 0 ) {
 			for (i = 0 ; i < radio; i++) {
 				elements[i] = 0 ;	
-				//printf("blockid %d, element %d \n", blockIdx.x, elements[ i ]);
 			}
 			
 		} else {
 			for(i = 0 ; i < radio; i++){
 				elements[ i ] = inputArray[start - radio + i ];
-				//printf("blockid %d, element %d \n", blockIdx.x, elements[ i]);
 			}
 		}
 		
@@ -74,16 +70,11 @@ __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask
 		if (start == SIZE_X - 1 ){ // Soy el ultimo elemento del array de entrada?
 			for (i = 0; i < radio; i++){
 				elements[CHUNK + radio + i ] = 0;
-				
-				//printf("pepe   %d \n", CHUNK + i  );
-				//printf("3 - blockid %d, element %d \n", blockIdx.x, elements[ CHUNK + i]);
 			}
 		} else { 	
 			// Soy el ultimo elemento del bloque
 			for (i = 0; i < radio; i++) {
 				elements[blockDim.x + radio + i ] = inputArray[start + i + 1];
-				
-				//printf("blockid %d, element %d \n", blockIdx.x, elements[ CHUNK + i]);
 			}
 		}
 		
@@ -99,22 +90,13 @@ __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask
 	
 	for(i = threadIdx.x ; i <= threadIdx.x + 2*radio; i++){
 		
-		ac+= elements[ i ] ;
-		//printf("$$$  %d    %d    %d\n", elements[i], i, start );
+		ac+= elements[ i ] *mask[maskInd]  ;
+		//printf(" %d \n" , maskInd);
+		maskInd++;
 		
 	}
 
 	outputArray[start] = ac;
-
-	//printf(" >> %d   %d   %d  %d \n", min, max, start, ac );
-}
-
-__global__ void Kernel_Convolucion_Constante(int * inputArray, int* outputArray){
-
-}
-
-__global__ void Kernel_Convolucion_Shared(int * inputArray, int* outputArray, int* mask){
-
 }
 
 void Convolucion_C(int * inputArray, int* ouputArray, int * mask)
@@ -137,7 +119,7 @@ int main() {
 	int* outputArray_CPU = (int*)malloc(sizeof(int) * SIZE_X);
 	int* outputArray_GPU = (int*)malloc(sizeof(int) * SIZE_X);
 	int* mask = (int*)malloc(sizeof(int) * MASK_SIZE); 
-
+	int* mask_dev;
 	int i;
 
 	struct timeval a, b,c,d,e;
@@ -152,6 +134,7 @@ int main() {
 	// memoria para arrays en dispositivo
 	cudaMalloc(&inputArray_dev, sizeof(int)*SIZE_X);
 	cudaMalloc(&outputArray_dev, sizeof(int) * SIZE_X);
+	cudaMalloc(&mask_dev, sizeof(int) * MASK_SIZE);
 
 	cudaCheck();
 
@@ -174,35 +157,23 @@ int main() {
 	// copiar array de entrada al dispositivo...
 	cudaMemcpy(inputArray_dev, inputArray,  sizeof(int) *SIZE_X, cudaMemcpyHostToDevice);
 	cudaMemcpy(outputArray_dev, outputArray_GPU,  sizeof(int) *SIZE_X, cudaMemcpyHostToDevice);
-	//cudaMemcpy(mask_dev, mask, sizeof(int) * MASK_SIZE, cudaMemcpyHostToDevice);
-
-	// setear en 0 el array de salida en el dispositivo...
-	// ...
-	//cudaMemset(outputArray_dev, 0, SIZE_X);
-		
-
-	// copiar la máscara o setear la máscara en memoria constante (cudaMemcpyToSymbol)
-	// ...
-	cudaMemcpyToSymbol(mask_dev, mask, sizeof(int) * MASK_SIZE);
-
+	cudaMemcpy(mask_dev, mask, sizeof(int) * MASK_SIZE, cudaMemcpyHostToDevice);
 
 	int cantBloques = SIZE_X / CHUNK;
 	int tamBloque = CHUNK;
 
 	
-
 	clockStart();
-	Kernel_Convolucion<<<cantBloques, tamBloque>>>(inputArray_dev, outputArray_dev, mask_dev);
-	cudaCheck();
+	Kernel_Convolucion_Shared<<<cantBloques, tamBloque>>>(inputArray_dev, outputArray_dev, mask_dev);
 	cudaDeviceSynchronize();
 	clockStop("GPU");
+	cudaCheck();
  
 	// copiar array de salida desde el dispositivo...
 	cudaMemcpy(outputArray_GPU,outputArray_dev,sizeof(int) *SIZE_X,cudaMemcpyDeviceToHost);
 
 	// chequear salida...
 	for(i = 0; i < SIZE_X; i++){
-		//	printf("%d :: %d \n",outputArray_CPU[i],outputArray_GPU[i]);	
 		if (outputArray_CPU[i] != outputArray_GPU[i]){
 			printf("outputArray_CPU[%d] != outputArray_GPU[%d] \n",i,i);
 			break;
@@ -220,10 +191,8 @@ int main() {
 	// liberar memoria dispositivo...
 	cudaFree(inputArray_dev);
 	cudaFree(outputArray_dev);
-	//cudaFree(outputArray_GPU);
-	//cudaFree(mask_dev);
-
-	char enter = getchar();
+	cudaFree(mask_dev);
 
 	return 0;
 }
+

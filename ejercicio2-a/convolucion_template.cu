@@ -13,9 +13,9 @@
 #include <time.h>
 //#include <sys\time.h>
 
-#define CHUNK 1024
+#define CHUNK 256
 #define SIZE_X 1048576
-#define MASK_SIZE 7
+#define MASK_SIZE 21
 
 
 // Declaramos la memoria constante
@@ -37,22 +37,21 @@ void cudaCheck()
 
 __global__ void Kernel_Convolucion(int * inputArray, int* outputArray, int* mask, int arraySize, int maskSize){
 
-	int start = blockDim.x * blockIdx.x  + threadIdx.x,
-		i = 0,
-		maskInd = 0,
-		radio = (int)maskSize / 2;
-	//printf("start %d , end %d \n", start - radio, start + radio);
-
-	for (i =start - radio; i <= (start + radio); i++) {
-		if (i >= 0 && i < arraySize ) {                    
-			outputArray[start] += inputArray[i] * mask[maskInd] ;
-		}
-		maskInd++;
-	}
+	
 }
 
 __global__ void Kernel_Convolucion_Constante(int * inputArray, int* outputArray){
+	int start = blockDim.x * blockIdx.x  + threadIdx.x,
+		i = 0,
+		maskInd = 0,
+		radio = (int)MASK_SIZE / 2;
 
+	for (i =start - radio; i <= (start + radio); i++) {
+		if (i >= 0 && i < SIZE_X ) {              
+			outputArray[start] += inputArray[i] * mask_dev[maskInd] ;
+		}
+		maskInd++;
+	}
 }
 
 __global__ void Kernel_Convolucion_Shared(int * inputArray, int* outputArray, int* mask){
@@ -119,25 +118,16 @@ int main() {
 	// copiar array de entrada al dispositivo...
 	cudaMemcpy(inputArray_dev, inputArray,  sizeof(int) *SIZE_X, cudaMemcpyHostToDevice);
 	cudaMemcpy(outputArray_dev, outputArray_GPU,  sizeof(int) *SIZE_X, cudaMemcpyHostToDevice);
-	//cudaMemcpy(mask_dev, mask, sizeof(int) * MASK_SIZE, cudaMemcpyHostToDevice);
-
-	// setear en 0 el array de salida en el dispositivo...
-	// ...
-	//cudaMemset(outputArray_dev, 0, SIZE_X);
-		
-
-	// copiar la máscara o setear la máscara en memoria constante (cudaMemcpyToSymbol)
-	// ...
 	cudaMemcpyToSymbol(mask_dev, mask, sizeof(int) * MASK_SIZE);
-
-
+	
+	
 	int cantBloques = SIZE_X / CHUNK;
 	int tamBloque = CHUNK;
 
 	clockStart();
-	Kernel_Convolucion<<<cantBloques, tamBloque>>>(inputArray_dev, outputArray_dev, mask_dev, SIZE_X, MASK_SIZE);
+	Kernel_Convolucion_Constante<<<cantBloques, tamBloque>>>(inputArray_dev, outputArray_dev);
 	cudaDeviceSynchronize();
-	clockStop("GPU");
+	clockStop("GPU");cudaCheck();
  
 	// copiar array de salida desde el dispositivo...
 	cudaMemcpy(outputArray_GPU,outputArray_dev,sizeof(int) *SIZE_X,cudaMemcpyDeviceToHost);
@@ -151,8 +141,6 @@ int main() {
 		}
 	}	
 
-	printf("OK !!" );
-
 	// liberar memoria cpu...
 	free(inputArray);
 	free(outputArray_CPU);
@@ -165,7 +153,6 @@ int main() {
 	//cudaFree(outputArray_GPU);
 	//cudaFree(mask_dev);
 
-	//char enter = getchar();
-
 	return 0;
 }
+
