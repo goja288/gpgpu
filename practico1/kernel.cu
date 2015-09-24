@@ -6,6 +6,7 @@
 #include "util.h"
 
 using namespace std;
+#define _CHUNK 32 // TAMAÑO DE MATRICES DEBEN SER MULTIPLO DE _CHUNK !!!!!!
 
 //Kernel
 
@@ -46,15 +47,6 @@ __global__ void MatrixSumKernel_2(int M, float* A_dev, float* SumPar_dev) {
 // Ejericio 2
 __global__ void SumaColMatrizKernel2(int M, float* A_dev, float* SumPar_dev){
 
-	/*
-		se asume que
-		int chunk = 32;
-		dim3 tamGrid(1, N); //Grid dimensión, N bloques
-		dim3 tamBlock(chunk,1,1); //Block dimensión
-		for(int i =0; i<CANT_REPETICIONES ; i++)
-		SumaColMatrizKernel<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
-	*/
-
 	float tmpValue = 0;
 	int size = M / blockDim.x;
 	int start = blockIdx.y * M + threadIdx.x * size;
@@ -71,16 +63,6 @@ __global__ void SumaColMatrizKernel2(int M, float* A_dev, float* SumPar_dev){
 // Ejecicio 3.a
 __global__ void SumaColMatrizKernel3A(int M,float* A_dev, float* SumPar_dev){
 	
-	/*
-		se asume que
-		int chunk = 32;
-		dim3 tamGrid(1, N); //Grid dimensión, N bloques
-		dim3 tamBlock(chunk,1,1); //Block dimensión
-		for(int i =0; i<CANT_REPETICIONES ; i++)
-		SumaColMatrizKernel<<<tamGrid, tamBlock>>>(M, A_dev, SumPar_dev);
-		x
-	*/
-
 	float tmpValue = 0;
 	int columna = blockIdx.y * M;
 	int chunk2 = gridDim.y / blockDim.x ;//blockDim.x;
@@ -136,7 +118,7 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 	clockStop("transf CPU -> GPU");
 
 	clockStart();
-
+	// 
 	switch(algoritmo) {
 		
 		case 1: {// ejemplo dado
@@ -152,10 +134,10 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 		}
 		case 2: { // Ejercicio 1
 			int _chunk2 = 32; // DESVENTAJA: Threads sin utilizar, hacer chequeos extras
-			dim3 tamGrid( (int)( N / _chunk2)  , 1);
+			dim3 tamGrid( (int)( N / _CHUNK)  , 1);
 
 			// dispongo bloques horizontalmente
-			dim3 tamBlock( _chunk2,  1);
+			dim3 tamBlock( _CHUNK,  1);
 			
 			// dispongo threads horizontalmente
 			for(int i = 0; i < CANT_REPETICIONES; i++)
@@ -165,12 +147,9 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 		}
 		case 3: { // Ejercicio 2
 			
-			//printf("\n\nNo implementadoooooo!! :)\n\n\n");
 
-			// configuración de la ejecución
-			int newChunk = 32;
 			dim3 tamGrid(1, N); //Grid dimensión, N bloques
-			dim3 tamBlock(newChunk,1,1); //Block dimensión
+			dim3 tamBlock(_CHUNK,1,1); //Block dimensión
 
 			// lanzamiento del kernel
 			for(int i = 0; i < CANT_REPETICIONES; i++) 
@@ -182,9 +161,8 @@ float sumaColMatriz(int M, int N, float * A_hst, int algoritmo) {
 		}
 		case 4: { // Ejercicio 3.a
 
-			int newChunk = 32;
 			dim3 tamGrid(1, N); //Grid dimensión, N bloques
-			dim3 tamBlock(newChunk,1,1); //Block dimensión
+			dim3 tamBlock(_CHUNK,1,1); //Block dimensión
 		
 			// lanzamiento del kernel
 			for (int i = 0; i < CANT_REPETICIONES; i++)
