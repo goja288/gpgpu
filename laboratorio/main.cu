@@ -1,5 +1,4 @@
-﻿
-#include "cuda_runtime.h"
+﻿#include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
 #include <stdio.h>
@@ -11,7 +10,7 @@ using namespace cimg_library;
 int main()
 {
     
-	CImg<float> image("img\\fing.pgm");
+	CImg<float> image("img/fing.pgm");
 	
 	float * img_matrix = image.data();
 
@@ -26,6 +25,7 @@ int main()
 	while (!main_disp.is_closed()) {
 		main_disp.wait();
 	}
+	printf("%s\n", "Hi manso....");
 
 	return 0;
 }
