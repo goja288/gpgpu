@@ -46,8 +46,8 @@ all: voronoi
 #main: cimg.o
 voronoi: 
 
-	$(NVCC) voronoi.cu -o main $(FLAGS_NVCC) $(ARCH) $(WARNING)
+	$(NVCC) voronoi.cu -o voronoi $(FLAGS_NVCC) $(ARCH) $(WARNING)
 
 
 clean:
-	rm -rf *.o main
+	rm -rf *.o voronoi
