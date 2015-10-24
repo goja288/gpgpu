@@ -1,9 +1,12 @@
-﻿#include "cuda_runtime.h"
+﻿
+SE BORRA 
+/*#include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
 #include <stdio.h>
 
 #include "CImg.h"
+#include "voronoi.h"
 
 using namespace cimg_library;
 
@@ -20,6 +23,8 @@ int main()
 	//	...
 	//
 
+	voronoi_CPU(image);
+
 	CImgDisplay main_disp(image,"Fing");
 		
 	while (!main_disp.is_closed()) {
@@ -29,3 +34,4 @@ int main()
 
 	return 0;
 }
+*/

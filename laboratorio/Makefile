@@ -34,7 +34,7 @@ FLAGS_NVCC = -w
 # endif
 
 
-all: main
+all: voronoi
 
 #cimg.o:
 #	$(CC) -c main.cu $(WARNING)
@@ -44,9 +44,9 @@ all: main
 # 	$(NVCC) main.cu -o main -arch=compute_20 -code=sm_20
 
 #main: cimg.o
-main: 
+voronoi: 
 
-	$(NVCC) main.cu -o main $(ARCH) $(WARNING)
+	$(NVCC) voronoi.cu -o main $(FLAGS_NVCC) $(ARCH) $(WARNING)
 
 
 clean:
