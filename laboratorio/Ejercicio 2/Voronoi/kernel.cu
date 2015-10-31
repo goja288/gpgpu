@@ -94,7 +94,7 @@ __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHe
 	}
 }
 
-__global__ void kernelParte3(float* imagenPromedio, int* a_centros, float voronoiOutput, int width, int height) {
+__global__ void kernelParte3(float* input, float* ouput,float* imagenPromedio, int* a_centros, int width, int height) {
 
 }
 
@@ -174,7 +174,7 @@ int main()
 	unsigned int img_matrix_size = width * height * sizeof(float);
 	float* img_matrix = image.data();
 
-	sorteoCentros(42,width,height);
+	
 
 	/**
 	 * Parte 1 - Secuencial
@@ -281,13 +281,15 @@ int main()
 		parte2.wait();
 	}
 
+	// Liberamos la memoria del device
 	cudaFree(input_img_dev);
 	cudaFree(output_img_dev);
 
 	//free(img_matrix);
 	free(testAVG);
-	free(img_matrix_output);
 	
+
+
 	/**
 	 * Fin Parte 2 
 	 */
@@ -296,10 +298,67 @@ int main()
 	 * Parte 3
 	 */
 
+	float* input_img_parte3_dev,
+		 * output_img_parte3_dev;
+
+	// Sorteamos los centros
+	int* a_centros = sorteoCentros(42,width,height);
+
+	// Imagen promedio de la parte anterior
+	float* imagenPromedioParte2 = img_matrix_output;
+
+	// Reservamos memoria
+	float* img_matrix_parte3_output = (float*)malloc( img_matrix_size );
+
+	cudaMalloc(&input_img_parte3_dev, img_matrix_size);
+	cudaMalloc(&output_img_parte3_dev, img_matrix_size);
+
+	cudaMemset(output_img_parte3_dev, 0, img_matrix_size);
+	cudaMemcpy(input_img_parte3_dev, imagenPromedioParte2, img_matrix_size, cudaMemcpyHostToDevice);
+
+	// Llamamos al otro kernel
+	dim3 gridDimensionParte3( (int)( width / CHUNK) + (width % CHUNK == 0 ? 0 : 1), (int)(height / CHUNK ) + (height % CHUNK == 0 ? 0 : 1) );
+	dim3 blockDimensionParte3(CHUNK, CHUNK);
+
+	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(input_img_parte3_dev, output_img_parte3_dev,imagenPromedioParte2,a_centros,width,height);
+	cudaCheck();
+	cudaDeviceSynchronize();
+
+	cudaMemcpy(img_matrix_parte3_output, output_img_dev, img_matrix_size, cudaMemcpyDeviceToHost);
+	
+	// Liberamos memoria del device
+	cudaFree(input_img_parte3_dev);
+	cudaFree(output_img_parte3_dev);
+
+	// Muestro la imagen de la parte 3
+
+	CImg<float> parte3(width,height,1, 3, 1);
+	for(int i = 0; i < height; i++){
+		for(int j = 0; j < width; j++){
+			tmp =  img_matrix_parte3_output[width * i + j];
+			parte3(j, i, 0) = tmp;
+			parte3(j, i, 1) = tmp;
+			parte3(j, i, 2) = tmp;
+		}
+	}
+		
+	//result.save_png("resultado.png");
+	
+	CImgDisplay parte3_disp(parte3,"Parte3");
+	while (!parte3_disp.is_closed()) {
+		parte3_disp.wait();
+	}
+
+
+	// Liberamos la memoria 
+	free(img_matrix_parte3_output);
+
 	/**
 	 * FIN Parte 3
 	 */
 
+	// Liberamos lo que quedo
+	free(img_matrix_output);
 
     return 0;
 }
