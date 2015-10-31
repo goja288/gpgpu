@@ -10,6 +10,66 @@ using namespace std;
 #define CHUNK 32
 #define MASKSIZE 5
 
+// Retorna un array con la posicion de cada centro
+int* sorteoCentros(int cantCentros, int width, int height) {
+
+	int* a_centros = (int*)malloc(sizeof(int) * width * height);
+	for (int i = 0; i < width * height; i++) {
+		a_centros[i] = 0;
+	}
+
+	int centro;
+	if (cantCentros >= width * height) {
+		// te fuiste de tema tenes mas centro que pixeles
+		printf("Ehhh mmm te excediste un poco con la cantidad de centros\n ");
+	}
+	else {
+		int c = 0;
+		int maxIteraciones = cantCentros * 10 ;
+		while (c < maxIteraciones && cantCentros > 0) {
+			centro = (int) (rand() % (width * height));
+			//printf("aaa %d\n", centro);
+			
+			// Si no habia asignado un centro lo agrego, si ya habia intento sortear de nuevo
+			if (a_centros[centro] == 0) { 
+				a_centros[centro] = 1;
+				cantCentros--;
+			}
+			c++;
+		}
+	}
+
+	/** debug **/
+
+	int cantCentrosAux = 0;
+	printf("Centros asignados en: ");
+	for(int aux = 0; aux < width*height; aux++) {
+		if (a_centros[aux] == 1) {
+			printf("%d,",aux);
+			cantCentrosAux++;
+		}
+	}
+	printf("\n\nCant Centros asignados : %d\n", cantCentrosAux);
+	/** fin debug **/
+
+	return a_centros;
+
+}
+
+/**
+ * Funciones auxiliares
+ */
+
+void imprimirMatriz(float* m, int width, int height){
+	int i, j;
+	for(j =0; j < height; j++){
+		for(i=0;i < width; i++){
+			fprintf(stderr, "%.2f  ", m[ j*width + i] );
+		}
+		fprintf(stderr, "\n" );
+	}
+}
+
 int main()
 {
 
@@ -25,6 +85,10 @@ int main()
 
 	unsigned int img_matrix_size = width * height * sizeof(float);
 	float* img_matrix = image.data();
+
+	sorteoCentros(42,width,height);
+
+	//imprimirMatriz(img_matrix,width, height);
 
 	/**
 	 * Parte 1 - Secuencial
@@ -88,6 +152,16 @@ int main()
 	/**
 	 * FIN Parte 1 - Secuencial
 	 */
+
+
+	/**
+	 * Parte 3 - Secuencial
+	 */
+
+	/**
+	 * FIN Parte 3 - Secuencial
+	 */
+
 
     return 0;
 }
