@@ -94,8 +94,10 @@ __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHe
 	}
 }
 
-__global__ void kernelParte3(float* input, float* ouput,float* imagenPromedio, int* a_centros, int width, int height) {
+__global__ void kernelParte3(float* input, float* ouput, int* a_centros, int width, int height) {
 
+	// Una opcion es obtener la distancia de cada punto a todos los centros y 
+	// esto hacerlo por hilos
 }
 
 // Retorna un array con la posicion de cada centro
@@ -302,6 +304,7 @@ int main()
 		 * output_img_parte3_dev;
 
 	// Sorteamos los centros
+	// TODO Cargar en memoria compartida los centros
 	int* a_centros = sorteoCentros(42,width,height);
 
 	// Imagen promedio de la parte anterior
@@ -320,7 +323,7 @@ int main()
 	dim3 gridDimensionParte3( (int)( width / CHUNK) + (width % CHUNK == 0 ? 0 : 1), (int)(height / CHUNK ) + (height % CHUNK == 0 ? 0 : 1) );
 	dim3 blockDimensionParte3(CHUNK, CHUNK);
 
-	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(input_img_parte3_dev, output_img_parte3_dev,imagenPromedioParte2,a_centros,width,height);
+	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(input_img_parte3_dev, output_img_parte3_dev,a_centros,width,height);
 	cudaCheck();
 	cudaDeviceSynchronize();
 
