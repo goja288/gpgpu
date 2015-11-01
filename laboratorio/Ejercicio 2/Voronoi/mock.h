@@ -21,6 +21,18 @@ void imprimirMatriz(float* m, int width, int height){
 
 }
 
+void imprimirMatrizInt(int* m, int width, int height){
+	int i, j;
+	
+	for(j =0; j < height; j++){
+		for(i=0;i < width; i++){
+			fprintf(stderr, "%d  ", m[ j*width + i] );
+		}
+		fprintf(stderr, "\n" );
+	}
+
+}
+
 bool compareArray(float* a1, float* a2, int width, int height){
 
 	int i =0, tope = width * height;

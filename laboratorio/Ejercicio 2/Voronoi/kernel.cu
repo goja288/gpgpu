@@ -2,6 +2,7 @@
 #include "device_launch_parameters.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <climits>
 #include "CImg.h"
 #include "mock.h"
 
@@ -10,6 +11,7 @@ using namespace std;
 
 #define CHUNK 32
 #define MASKSIZE 5
+#define CANT_CENTROS 9999
 
 __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHeight) {
 
@@ -94,55 +96,79 @@ __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHe
 	}
 }
 
-__global__ void kernelParte3(float* input, float* ouput, int* a_centros, int width, int height) {
+__global__ void kernelParte3(float* input, float* output, int* a_centros, int cantCentros, int width, int height) {
 
-	// Una opcion es obtener la distancia de cada punto a todos los centros y 
-	// esto hacerlo por hilos
+	float distanciaActual = -1;
+	float distanciaMinima = INT_MAX; // fixme
+
+	// Cargo en memoria compartida
+
+	unsigned int column =  threadIdx.x,
+		row = threadIdx.y,
+		globalColumn = blockIdx.x * blockDim.x  + column,
+		globalRow = blockIdx.y * blockDim.y  + row;
+
+	unsigned int bestX = -1, 
+		bestY = -1;
+
+	
+
+	// Controlo que no me pase
+	if (globalColumn < width && globalRow < height) {
+
+		// Me fijo en el pixel que estoy la distancia a cada centro
+		for (unsigned int i = 0; i < cantCentros; i++) {
+			unsigned int x = a_centros[i];
+			unsigned int y = a_centros[i + cantCentros];
+
+			//distanciaActual = sqrt( powf((globalColumn-x),2) + powf((globalRow - y),2));
+			distanciaActual = sqrtf( (globalColumn-x) * (globalColumn-x) + (globalRow - y) * (globalRow - y));
+			
+		
+			if ( distanciaActual < distanciaMinima ) {
+				bestX = x;
+				bestY = y;
+				distanciaMinima = distanciaActual;
+			}
+		}
+
+
+	
+		// Asigno el color del centro al pixel
+		output[ width  * globalRow +  globalColumn] = input[ width * bestY +  bestX];
+
+	}
+
+
+
+	// Mejora limitar a los centros que busca
 }
 
 // Retorna un array con la posicion de cada centro
 int* sorteoCentros(int cantCentros, int width, int height) {
-
-	int* a_centros = (int*)malloc(sizeof(int) * width * height);
-	for (int i = 0; i < width * height; i++) {
-		a_centros[i] = 0;
-	}
-
-	int centro;
-	if (cantCentros >= width * height) {
+	
+	if (cantCentros >= width * height) {	
 		// te fuiste de tema tenes mas centro que pixeles
 		printf("Ehhh mmm te excediste un poco con la cantidad de centros\n ");
+		return 0;
 	}
 	else {
-		int c = 0;
-		int maxIteraciones = cantCentros * 10 ;
-		while (c < maxIteraciones && cantCentros > 0) {
-			centro = (int) (rand() % (width * height));
-			//printf("aaa %d\n", centro);
+		int* a_centros = (int*)malloc(sizeof(int) * cantCentros * 2);
+		memset(a_centros,0,sizeof(int) * cantCentros * 2);
+		int centroX, centroY;
+
+		for (int i = 0; i < cantCentros; i++) {
+			centroX = (int) (rand() % (width));
+			centroY = (int) (rand() % (height));
 			
-			// Si no habia asignado un centro lo agrego, si ya habia intento sortear de nuevo
-			if (a_centros[centro] == 0) { 
-				a_centros[centro] = 1;
-				cantCentros--;
-			}
-			c++;
+			a_centros[i] = centroX;
+			a_centros[i + cantCentros] = centroY;
+
 		}
+
+
+		return a_centros;
 	}
-
-	/** debug **/
-
-	int cantCentrosAux = 0;
-	printf("Centros asignados en: ");
-	for(int aux = 0; aux < width*height; aux++) {
-		if (a_centros[aux] == 1) {
-			printf("%d,",aux);
-			cantCentrosAux++;
-		}
-	}
-	printf("\n\nCant Centros asignados : %d\n", cantCentrosAux);
-	/** fin debug **/
-
-	return a_centros;
 
 }
 
@@ -169,6 +195,7 @@ int main()
 
 	// Cargamos la imagen original
 	CImg<float> image("img/fing.pgm");
+	//CImg<float> image("img/fing_xl.pgm");
 
 	int width = image.width();
 	int height = image.height();
@@ -204,7 +231,7 @@ int main()
 			for (x = inicioX; x < finX; x++) {
 				for (y = inicioY; y < finY; y++) {
 					// Para filtar los bordes de la imagen
-					if ( (x > 0) && (x < width) && (y > 0) && (y < height)) {
+					if ( (x >= 0) && (x < width) && (y >= 0) && (y < height)) {
 						 cantPixeles++;
 						 sumaColoresPixeles += img_matrix[y * width + x];
 					}
@@ -285,7 +312,7 @@ int main()
 
 	// Liberamos la memoria del device
 	cudaFree(input_img_dev);
-	cudaFree(output_img_dev);
+	
 
 	//free(img_matrix);
 	free(testAVG);
@@ -303,35 +330,36 @@ int main()
 	float* input_img_parte3_dev,
 		 * output_img_parte3_dev;
 
+	int* a_centros_parte3_dev;
+
+	unsigned int centros_size = sizeof(int) * CANT_CENTROS * 2;
 	// Sorteamos los centros
 	// TODO Cargar en memoria compartida los centros
-	int* a_centros = sorteoCentros(42,width,height);
+	
+	int* a_centros = sorteoCentros(CANT_CENTROS,width,height);
 
-	// Imagen promedio de la parte anterior
-	float* imagenPromedioParte2 = img_matrix_output;
 
 	// Reservamos memoria
 	float* img_matrix_parte3_output = (float*)malloc( img_matrix_size );
 
 	cudaMalloc(&input_img_parte3_dev, img_matrix_size);
 	cudaMalloc(&output_img_parte3_dev, img_matrix_size);
+	cudaMalloc(&a_centros_parte3_dev, centros_size);
 
 	cudaMemset(output_img_parte3_dev, 0, img_matrix_size);
-	cudaMemcpy(input_img_parte3_dev, imagenPromedioParte2, img_matrix_size, cudaMemcpyHostToDevice);
+	cudaMemcpy(a_centros_parte3_dev, a_centros, centros_size, cudaMemcpyHostToDevice);
 
 	// Llamamos al otro kernel
 	dim3 gridDimensionParte3( (int)( width / CHUNK) + (width % CHUNK == 0 ? 0 : 1), (int)(height / CHUNK ) + (height % CHUNK == 0 ? 0 : 1) );
 	dim3 blockDimensionParte3(CHUNK, CHUNK);
 
-	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(input_img_parte3_dev, output_img_parte3_dev,a_centros,width,height);
+	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(output_img_dev, output_img_parte3_dev,a_centros_parte3_dev,CANT_CENTROS,width,height);
 	cudaCheck();
 	cudaDeviceSynchronize();
 
-	cudaMemcpy(img_matrix_parte3_output, output_img_dev, img_matrix_size, cudaMemcpyDeviceToHost);
+	cudaMemcpy(img_matrix_parte3_output, output_img_parte3_dev, img_matrix_size, cudaMemcpyDeviceToHost);
 	
-	// Liberamos memoria del device
-	cudaFree(input_img_parte3_dev);
-	cudaFree(output_img_parte3_dev);
+	
 
 	// Muestro la imagen de la parte 3
 
@@ -355,10 +383,17 @@ int main()
 
 	// Liberamos la memoria 
 	free(img_matrix_parte3_output);
+	
 
 	/**
 	 * FIN Parte 3
 	 */
+
+	// Liberamos memoria del device
+	cudaFree(input_img_parte3_dev);
+	cudaFree(output_img_parte3_dev);
+	cudaFree(a_centros_parte3_dev);
+	cudaFree(output_img_dev);
 
 	// Liberamos lo que quedo
 	free(img_matrix_output);
