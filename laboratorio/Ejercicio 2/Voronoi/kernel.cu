@@ -11,13 +11,13 @@ using namespace std;
 
 #define CHUNK 32
 #define MASKSIZE 5
-#define CANT_CENTROS 9999
+#define CANT_CENTROS 10000
 
 __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHeight) {
 
 	__shared__ float maskMemShared[ ((int)(MASKSIZE / 2) * 2 + CHUNK) * ((int)(MASKSIZE / 2) * 2 + CHUNK)];
 
-	/******************* CARGA DE MEMORIA COMPARTIDA *************/
+	// CARGA DE MEMORIA COMPARTIDA
 
 	int maskPadding = (int)(MASKSIZE / 2),
 	    maskDim  = maskPadding * 2 + CHUNK, // maskDim x maskDim
@@ -70,10 +70,9 @@ __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHe
 		}
 
 	}
+
 	*/
-
-
-	/************** CUENTAS ***************/
+	// CUENTAS
 
 	if (globalColumn < imgWidth  && globalRow < imgHeight) {
 
@@ -96,22 +95,20 @@ __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHe
 	}
 }
 
+
 __global__ void kernelParte3(float* input, float* output, int* a_centros, int cantCentros, int width, int height) {
 
 	float distanciaActual = -1;
 	float distanciaMinima = INT_MAX; // fixme
 
 	// Cargo en memoria compartida
-
 	unsigned int column =  threadIdx.x,
 		row = threadIdx.y,
 		globalColumn = blockIdx.x * blockDim.x  + column,
 		globalRow = blockIdx.y * blockDim.y  + row;
 
-	unsigned int bestX = -1, 
-		bestY = -1;
-
-	
+	unsigned int bestX = 0, 
+		bestY = 0;
 
 	// Controlo que no me pase
 	if (globalColumn < width && globalRow < height) {
@@ -120,9 +117,12 @@ __global__ void kernelParte3(float* input, float* output, int* a_centros, int ca
 		for (unsigned int i = 0; i < cantCentros; i++) {
 			unsigned int x = a_centros[i];
 			unsigned int y = a_centros[i + cantCentros];
-
+			//unsigned int x = 1;
+			//unsigned int y = 1;
 			//distanciaActual = sqrt( powf((globalColumn-x),2) + powf((globalRow - y),2));
 			distanciaActual = sqrtf( (globalColumn-x) * (globalColumn-x) + (globalRow - y) * (globalRow - y));
+
+			//distanciaActual = sqrt( (globalColumn-x) * (globalColumn-x) + (globalRow - y) * (globalRow - y));
 			
 		
 			if ( distanciaActual < distanciaMinima ) {
@@ -135,7 +135,14 @@ __global__ void kernelParte3(float* input, float* output, int* a_centros, int ca
 
 	
 		// Asigno el color del centro al pixel
+		/*if ((width * bestY + bestX) >= (width * height)) {
+			printf("ABC");
+		}
+		if ((width  * globalRow +  globalColumn) >= (width * height)) {
+			printf("ZXY");
+		}*/
 		output[ width  * globalRow +  globalColumn] = input[ width * bestY +  bestX];
+		//output[ width  * globalRow +  globalColumn] = input[ width  * globalRow +  globalColumn];
 
 	}
 
@@ -186,14 +193,20 @@ void cudaCheck()
 	}
 }
 
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      //if (abort) exit(code);
+   }
+}
+
 int main()
 {
-
-	float* input_img_dev,
-		 * output_img_dev, 
-		 * img_matrix_output;
-
 	// Cargamos la imagen original
+	//CImg<float> image("img/fing.pgm");
 	CImg<float> image("img/fing.pgm");
 	//CImg<float> image("img/fing_xl.pgm");
 
@@ -202,7 +215,6 @@ int main()
 
 	unsigned int img_matrix_size = width * height * sizeof(float);
 	float* img_matrix = image.data();
-
 	
 
 	/**
@@ -216,17 +228,14 @@ int main()
 	// Recorro toda la imagen
 	for (int fila = 0; fila < height; fila++) {
 		for (int columna = 0; columna < width; columna++) {
-			
 			int cantPixeles = 0;
 			float sumaColoresPixeles = 0;
-
 			// Recorro la ventana para obtener el promedio
 			int inicioX = columna - ventana;
 			int inicioY = fila - ventana;
 			int finX =  columna + ventana;
 			int finY = fila + ventana;
 			int x,y;
-
 			// Recorro por ventana
 			for (x = inicioX; x < finX; x++) {
 				for (y = inicioY; y < finY; y++) {
@@ -237,10 +246,8 @@ int main()
 					}
 				}
 			}
-
 			// Cargo a cada centro el promedio
 			matrizVoronoi[fila * width + columna] = sumaColoresPixeles / cantPixeles;
-
 		}
 	}
 	
@@ -273,53 +280,46 @@ int main()
 	 * Parte 2 
 	 */
 	
-	/*************************** PREPARO TEST ***********************************/
+	// PREPARO TEST
 
-	float* testAVG = testear(img_matrix, width, height, MASKSIZE);
+	// float* testAVG = testear(img_matrix, width, height, MASKSIZE);
 
-	/*************************** RESERVA DE MEMORIA *****************************/
+	// RESERVA DE MEMORIA
 
-	input_img_dev;
-	output_img_dev;
-	img_matrix_output = (float*)malloc( img_matrix_size );
+	float* input_img_parte2_dev;
+	float* output_img_parte2_dev;
 
-	cudaMalloc(&input_img_dev, img_matrix_size);
-	cudaMalloc(&output_img_dev, img_matrix_size);
+	cudaMalloc(&input_img_parte2_dev, img_matrix_size);
+	cudaMalloc(&output_img_parte2_dev, img_matrix_size);
 
+	cudaMemset(output_img_parte2_dev, 0, img_matrix_size);
+	cudaMemcpy(input_img_parte2_dev, img_matrix, img_matrix_size, cudaMemcpyHostToDevice);
 
-	cudaMemset(output_img_dev, 0, img_matrix_size);
-	cudaMemcpy(input_img_dev, img_matrix, img_matrix_size, cudaMemcpyHostToDevice);
+	// AJUSTE DE INVOCACION
 
-	/************************* AJUSTE DE INVOCACION *********************/
-
-	dim3 gridDimension( (int)( width / CHUNK) + (width % CHUNK == 0 ? 0 : 1), (int)(height / CHUNK ) + (height % CHUNK == 0 ? 0 : 1) );
+	dim3 gridDimension( (int)(width / CHUNK) + (width % CHUNK == 0 ? 0 : 1), (int)(height / CHUNK ) + (height % CHUNK == 0 ? 0 : 1) );
 	dim3 blockDimension(CHUNK, CHUNK);
 
-	kernelParte2 <<< gridDimension, blockDimension>>>(input_img_dev, output_img_dev, width, height);
-	cudaCheck();
-	cudaDeviceSynchronize();
+	printf("Imagen %d x %d\n",width,height);
 
-	cudaMemcpy(img_matrix_output, output_img_dev, img_matrix_size, cudaMemcpyDeviceToHost);
-	compareArray(testAVG, img_matrix_output, width, height);
+	kernelParte2 <<< gridDimension, blockDimension>>>(input_img_parte2_dev, output_img_parte2_dev, width, height);
+	gpuErrchk( cudaPeekAtLastError() );
+	gpuErrchk( cudaDeviceSynchronize() );
+	//cudaCheck();
+	//cudaDeviceSynchronize();
 
-	//result.save_png("resultado.png");
+	float* img_matrix_parte2_output = (float*)malloc(img_matrix_size);
+	gpuErrchk(cudaMemcpy(img_matrix_parte2_output,output_img_parte2_dev, img_matrix_size, cudaMemcpyDeviceToHost));
 	
 	CImgDisplay parte2(result,"Parte2");
-	
 	while (!parte2.is_closed()) {
 		parte2.wait();
 	}
 
-	// Liberamos la memoria del device
-	cudaFree(input_img_dev);
-	
+	cudaFree(output_img_parte2_dev);
+	cudaFree(input_img_parte2_dev);	
 
-	//free(img_matrix);
-	free(testAVG);
-	
-
-
-	/**
+	 /*
 	 * Fin Parte 2 
 	 */
 
@@ -327,20 +327,16 @@ int main()
 	 * Parte 3
 	 */
 
-	float* input_img_parte3_dev,
-		 * output_img_parte3_dev;
-
-	int* a_centros_parte3_dev;
-
-	unsigned int centros_size = sizeof(int) * CANT_CENTROS * 2;
 	// Sorteamos los centros
-	// TODO Cargar en memoria compartida los centros
-	
 	int* a_centros = sorteoCentros(CANT_CENTROS,width,height);
-
 
 	// Reservamos memoria
 	float* img_matrix_parte3_output = (float*)malloc( img_matrix_size );
+
+	float* input_img_parte3_dev;
+	float* output_img_parte3_dev;
+	int* a_centros_parte3_dev;
+	unsigned int centros_size = sizeof(int) * CANT_CENTROS * 2;
 
 	cudaMalloc(&input_img_parte3_dev, img_matrix_size);
 	cudaMalloc(&output_img_parte3_dev, img_matrix_size);
@@ -348,14 +344,20 @@ int main()
 
 	cudaMemset(output_img_parte3_dev, 0, img_matrix_size);
 	cudaMemcpy(a_centros_parte3_dev, a_centros, centros_size, cudaMemcpyHostToDevice);
+	cudaMemcpy(input_img_parte3_dev, img_matrix_parte2_output, img_matrix_size, cudaMemcpyHostToDevice);
+	//cudaMemcpy(input_img_parte3_dev, img_matrix, img_matrix_size, cudaMemcpyHostToDevice);
+	
+	//free(img_matrix_parte2_output);
 
 	// Llamamos al otro kernel
 	dim3 gridDimensionParte3( (int)( width / CHUNK) + (width % CHUNK == 0 ? 0 : 1), (int)(height / CHUNK ) + (height % CHUNK == 0 ? 0 : 1) );
 	dim3 blockDimensionParte3(CHUNK, CHUNK);
 
-	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(output_img_dev, output_img_parte3_dev,a_centros_parte3_dev,CANT_CENTROS,width,height);
+	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(input_img_parte2_dev, output_img_parte3_dev,a_centros_parte3_dev,CANT_CENTROS,width,height);
 	cudaCheck();
-	cudaDeviceSynchronize();
+	gpuErrchk( cudaPeekAtLastError() );
+	gpuErrchk( cudaDeviceSynchronize() );
+	
 
 	cudaMemcpy(img_matrix_parte3_output, output_img_parte3_dev, img_matrix_size, cudaMemcpyDeviceToHost);
 	
@@ -372,6 +374,8 @@ int main()
 			parte3(j, i, 2) = tmp;
 		}
 	}
+
+
 		
 	//result.save_png("resultado.png");
 	
@@ -380,9 +384,7 @@ int main()
 		parte3_disp.wait();
 	}
 
-
 	// Liberamos la memoria 
-	free(img_matrix_parte3_output);
 	
 
 	/**
@@ -393,10 +395,9 @@ int main()
 	cudaFree(input_img_parte3_dev);
 	cudaFree(output_img_parte3_dev);
 	cudaFree(a_centros_parte3_dev);
-	cudaFree(output_img_dev);
+	free(img_matrix_parte3_output);
+	free(a_centros);
 
-	// Liberamos lo que quedo
-	free(img_matrix_output);
 
     return 0;
 }
