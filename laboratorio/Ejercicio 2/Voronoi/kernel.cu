@@ -11,35 +11,41 @@ using namespace cimg_library;
 
 #define CHUNK 32
 #define MASKSIZE 5
-#define CANT_CENTROS 5000
+#define CANT_CENTROS 6000
 
 void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int imgHeight){
 
-	int ventana = (int) MASKSIZE / 2; // para obtener hacia los costados
-
+	int ventana = (int) MASKSIZE / 2,// para obtener hacia los costados
+		inicioX,
+			inicioY,
+			finX, 
+			finY,
+			x, 
+			y,
+			fila,
+			columna;
+	float sumaColoresPixeles;
 	// Recorro toda la imagen
-	for (int fila = 0; fila < imgHeight; fila++) {
-		for (int columna = 0; columna < imgWidth; columna++) {
-			int cantPixeles = 0;
-			float sumaColoresPixeles = 0;
+	for ( fila = 0; fila < imgHeight; fila++) {
+		for ( columna = 0; columna < imgWidth; columna++) {
+			 sumaColoresPixeles = 0;
 			// Recorro la ventana para obtener el promedio
-			int inicioX = columna - ventana;
-			int inicioY = fila - ventana;
-			int finX =  columna + ventana;
-			int finY = fila + ventana;
-			int x,y;
+			 inicioX = columna - ventana;
+			 inicioY = fila - ventana;
+			 finX =  columna + ventana;
+			 finY = fila + ventana;
+			 x,y;
 			// Recorro por ventana
 			for (x = inicioX; x < finX; x++) {
 				for (y = inicioY; y < finY; y++) {
 					// Para filtar los bordes de la imagen
 					if ( (x >= 0) && (x < imgWidth) && (y >= 0) && (y < imgHeight)) {
-						 cantPixeles++;
 						 sumaColoresPixeles += img_matrix[y * imgWidth + x];
 					}
 				}
 			}
 			// Cargo a cada centro el promedio
-			output[fila * imgWidth + columna] = sumaColoresPixeles / cantPixeles;
+			output[fila * imgWidth + columna] = sumaColoresPixeles / (MASKSIZE * MASKSIZE);
 		}
 	}
 
@@ -47,8 +53,8 @@ void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int
 
 __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHeight) {
 
-	__shared__ float maskMemShared[ ((int)(MASKSIZE / 2) * 2 + CHUNK) * ((int)(MASKSIZE / 2) * 2 + CHUNK)];
 
+	__shared__ float maskMemShared[ ((int)(MASKSIZE / 2) * 2 + CHUNK) * ((int)(MASKSIZE / 2) * 2 + CHUNK)];
 	// CARGA DE MEMORIA COMPARTIDA
 
 	int maskPadding = (int)(MASKSIZE / 2),
@@ -89,21 +95,7 @@ __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHe
 	}
 
 	__syncthreads();
-	/*
-	if (column == 0 && row == 0 && blockIdx.x == 2 && blockIdx.y == 0) {
 
-		printf("%d  %d  \n ", globalColumn, globalRow);
-
-		for (int i = 0; i < maskDim ; i++) {
-			for (int j = 0; j < maskDim ; j++) {
-				printf("%f ", maskMemShared[i * maskDim + j]);
-			}
-			printf("\n");
-		}
-
-	}
-
-	*/
 	// CUENTAS
 
 	if (globalColumn < imgWidth  && globalRow < imgHeight) {
@@ -130,6 +122,11 @@ __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHe
 
 __global__ void kernelParte3(float* input, float* output, int* a_centros, int width, int height) {
 
+#if CANT_CENTROS <= 6000
+#define USE_SHARED_MEMORY 1
+	__shared__ unsigned int centros[CANT_CENTROS*2];
+#endif
+
 	float distanciaActual = -1,
 		distanciaMinima = INT_MAX,
 		tmpOp, 
@@ -138,6 +135,8 @@ __global__ void kernelParte3(float* input, float* output, int* a_centros, int wi
 
 	// Cargo en memoria compartida
 	unsigned int
+
+		globalIndex = blockDim.x * threadIdx.y + threadIdx.x,
 		
 		column =  threadIdx.x,
 		row = threadIdx.y,
@@ -151,13 +150,30 @@ __global__ void kernelParte3(float* input, float* output, int* a_centros, int wi
 		y,
 		i=0;
 
+#ifdef USE_SHARED_MEMORY
+
+	for(i =globalIndex; i < CANT_CENTROS; i+= CHUNK){
+		x = i + CANT_CENTROS;
+		centros[i] = a_centros[i];
+		centros[x] = a_centros[x];
+	}
+	__syncthreads();
+
+#endif
+
 	// Controlo que no me pase
 	if (globalColumn < width && globalRow < height) {
 
 		// Me fijo en el pixel que estoy la distancia a cada centro
-		for (; i < CANT_CENTROS; i++) {
+		for (i=0; i < CANT_CENTROS; i++) {
+
+#ifdef USE_SHARED_MEMORY
+			x = centros[i];
+			y = centros[i + CANT_CENTROS];
+#else
 			x = a_centros[i];
 			y = a_centros[i + CANT_CENTROS];
+#endif
 			tmpOp = (globalRow-y)*(globalRow-y) + (globalColumn - x)*(globalColumn - x);
 			distanciaActual = std::sqrt( tmpOp );
 			
@@ -215,7 +231,7 @@ void cudaCheck()
 	}
 }
 
-void showImage(float* img, bool wait, int width, int height, char* title){
+void showImage(float* img, int width, int height, char* title){
 	
 	int i, j;
 	CImg<float> imgDisplay(width,height,1, 3, 1);
@@ -230,14 +246,10 @@ void showImage(float* img, bool wait, int width, int height, char* title){
 		}
 	}
 
-	
-	if (wait){
+	CImgDisplay disp(imgDisplay,title);
 
-		CImgDisplay disp(imgDisplay,title);
-
-		while (!disp.is_closed()) {
-			disp.wait();
-		}
+	while (!disp.is_closed()) {
+		disp.wait();
 	}
 }
 
@@ -322,19 +334,19 @@ int main()
 	// ******************* MUESTRO IMAGENES ***********************
 
 	// ORIGINAL
-	//showImage(img_matrix, true, width, height, "ORIGINAL");
+	//showImage(img_matrix, width, height, "ORIGINAL");
 
 	// PARTE-1 , SECUENCIAL
 
-	//showImage(output_parte1, true, width, height, "PROMEDIO SECUENCIAL");
+	//showImage(output_parte1, width, height, "PROMEDIO SECUENCIAL");
 
 	// PARTE-2, PROMEDIO
 
-	showImage(output_parte2, true, width, height, "PROMEDIO CUDA");
+	//showImage(output_parte2, width, height, "PROMEDIO CUDA");
 
 	// PARTE-3, CENTROS
 
-	showImage(img_matrix_parte3_output, true, width, height, "CENTROS CUDA");
+	showImage(img_matrix_parte3_output, width, height, "CENTROS CUDA");
 
 	// LIBERAR MEMORIA
 
