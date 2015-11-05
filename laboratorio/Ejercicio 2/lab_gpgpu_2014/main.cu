@@ -1,15 +1,15 @@
 ﻿
-#define CHUNK 32
-#define MASKSIZE 5
+#define CHUNK 4
+#define MASKSIZE 3
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "CImg.h"
+//#include "CImg.h"
 #include "mock.h"
 
-using namespace cimg_library;
+//using namespace cimg_library;
 using namespace std;
 
 __global__ void kernel(float* input, float* ouput, int imgWidth, int imgHeight) {
@@ -54,21 +54,24 @@ __global__ void kernel(float* input, float* ouput, int imgWidth, int imgHeight) 
 		}
 		iMask += CHUNK;
 	}
-
 	__syncthreads();
+	
+
 	/*
+	
 	if (column == 0 && row == 0 && blockIdx.x == 2 && blockIdx.y == 0) {
 
-		printf("%d  %d  \n ", globalColumn, globalRow);
+		//printf("%d  %d  \n ", maskRow, maskColumn);
 
 		for (int i = 0; i < maskDim ; i++) {
 			for (int j = 0; j < maskDim ; j++) {
-				printf("%f ", maskMemShared[i * maskDim + j]);
+				printf("%.2f ", maskMemShared[i * maskDim + j]);
 			}
 			printf("\n");
 		}
 
 	}
+	
 	*/
 
 
@@ -126,17 +129,17 @@ int main()
 
 	/*************************** CARGA DE IMAGEN *****************************/
 
-	CImg<float> image("img\\fing.pgm");
+	//CImg<float> image("img\\fing.pgm");
 
-	width =   image.width();
-	height = image.height();
+	width =  9 ;//image.width();
+	height = 9;//image.height();
 
 	img_matrix_size = width * height * sizeof(float);
-	img_matrix = image.data();
+	//img_matrix = image.data();
 
-	//float* img_matrix = (float*)malloc( img_matrix_size );
+	img_matrix = (float*)malloc( img_matrix_size );
 
-	//generarMatriz(img_matrix, width, height);
+	generarMatriz(img_matrix, width, height);
 	//imprimirMatriz(img_matrix, width, height);
 
 	/*************************** PREPARO TEST ***********************************/
@@ -168,11 +171,11 @@ int main()
 	cudaDeviceSynchronize();
 
 	cudaMemcpy( img_matrix_output, output_img_dev, img_matrix_size, cudaMemcpyDeviceToHost);
-	compareArray( testAVG, img_matrix_output, width, height);
+	//compareArray( testAVG, img_matrix_output, width, height);
 	//imprimirMatriz(img_matrix_output, width, height);
 
 	/***************************** CREO IMAGEN *****************************/
-
+	/*
 	CImg<float> result(width,height,1, 3, 1);
 	for(i=0; i< height; i++){
 		for(j=0; j< width; j++){
@@ -196,15 +199,16 @@ int main()
 	while (!original.is_closed()) {
 		original.wait();
 	}
+	*/
 
 	cudaFree(input_img_dev);
 	cudaFree(output_img_dev);
 
-	//free(img_matrix);
+	free(img_matrix);
 	free(testAVG);
 	free(img_matrix_output);
 
-	//getchar();
+	getchar();
 
 
 	return 0;

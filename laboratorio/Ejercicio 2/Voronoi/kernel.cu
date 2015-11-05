@@ -2,16 +2,48 @@
 #include "device_launch_parameters.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <cmath>
 #include <climits>
 #include "CImg.h"
 #include "mock.h"
 
 using namespace cimg_library;
-using namespace std;
 
 #define CHUNK 32
 #define MASKSIZE 5
-#define CANT_CENTROS 10000
+#define CANT_CENTROS 5000
+
+void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int imgHeight){
+
+	int ventana = (int) MASKSIZE / 2; // para obtener hacia los costados
+
+	// Recorro toda la imagen
+	for (int fila = 0; fila < imgHeight; fila++) {
+		for (int columna = 0; columna < imgWidth; columna++) {
+			int cantPixeles = 0;
+			float sumaColoresPixeles = 0;
+			// Recorro la ventana para obtener el promedio
+			int inicioX = columna - ventana;
+			int inicioY = fila - ventana;
+			int finX =  columna + ventana;
+			int finY = fila + ventana;
+			int x,y;
+			// Recorro por ventana
+			for (x = inicioX; x < finX; x++) {
+				for (y = inicioY; y < finY; y++) {
+					// Para filtar los bordes de la imagen
+					if ( (x >= 0) && (x < imgWidth) && (y >= 0) && (y < imgHeight)) {
+						 cantPixeles++;
+						 sumaColoresPixeles += img_matrix[y * imgWidth + x];
+					}
+				}
+			}
+			// Cargo a cada centro el promedio
+			output[fila * imgWidth + columna] = sumaColoresPixeles / cantPixeles;
+		}
+	}
+
+}
 
 __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHeight) {
 
@@ -96,59 +128,49 @@ __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHe
 }
 
 
-__global__ void kernelParte3(float* input, float* output, int* a_centros, int cantCentros, int width, int height) {
+__global__ void kernelParte3(float* input, float* output, int* a_centros, int width, int height) {
 
-	float distanciaActual = -1;
-	float distanciaMinima = INT_MAX; // fixme
+	float distanciaActual = -1,
+		distanciaMinima = INT_MAX,
+		tmpOp, 
+		op1, 
+		op2; // fixme
 
 	// Cargo en memoria compartida
-	unsigned int column =  threadIdx.x,
+	unsigned int
+		
+		column =  threadIdx.x,
 		row = threadIdx.y,
-		globalColumn = blockIdx.x * blockDim.x  + column,
-		globalRow = blockIdx.y * blockDim.y  + row;
 
-	unsigned int bestX = 0, 
-		bestY = 0;
+		globalColumn = blockIdx.x * blockDim.x  + column,
+		globalRow = blockIdx.y * blockDim.y  + row,
+		
+		bestX = 0, 
+		bestY = 0,
+		x,
+		y,
+		i=0;
 
 	// Controlo que no me pase
 	if (globalColumn < width && globalRow < height) {
 
 		// Me fijo en el pixel que estoy la distancia a cada centro
-		for (unsigned int i = 0; i < cantCentros; i++) {
-			unsigned int x = a_centros[i];
-			unsigned int y = a_centros[i + cantCentros];
-			//unsigned int x = 1;
-			//unsigned int y = 1;
-			//distanciaActual = sqrt( powf((globalColumn-x),2) + powf((globalRow - y),2));
-			distanciaActual = sqrtf( (globalColumn-x) * (globalColumn-x) + (globalRow - y) * (globalRow - y));
-
-			//distanciaActual = sqrt( (globalColumn-x) * (globalColumn-x) + (globalRow - y) * (globalRow - y));
+		for (; i < CANT_CENTROS; i++) {
+			x = a_centros[i];
+			y = a_centros[i + CANT_CENTROS];
+			tmpOp = (globalRow-y)*(globalRow-y) + (globalColumn - x)*(globalColumn - x);
+			distanciaActual = std::sqrt( tmpOp );
 			
-		
 			if ( distanciaActual < distanciaMinima ) {
 				bestX = x;
 				bestY = y;
 				distanciaMinima = distanciaActual;
 			}
 		}
-
-
-	
 		// Asigno el color del centro al pixel
-		/*if ((width * bestY + bestX) >= (width * height)) {
-			printf("ABC");
-		}
-		if ((width  * globalRow +  globalColumn) >= (width * height)) {
-			printf("ZXY");
-		}*/
 		output[ width  * globalRow +  globalColumn] = input[ width * bestY +  bestX];
-		//output[ width  * globalRow +  globalColumn] = input[ width  * globalRow +  globalColumn];
 
 	}
-
-
-
-	// Mejora limitar a los centros que busca
 }
 
 // Retorna un array con la posicion de cada centro
@@ -193,20 +215,35 @@ void cudaCheck()
 	}
 }
 
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-   if (code != cudaSuccess) 
-   {
-      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      //if (abort) exit(code);
-   }
+void showImage(float* img, bool wait, int width, int height, char* title){
+	
+	int i, j;
+	CImg<float> imgDisplay(width,height,1, 3, 1);
+	float tmp;
+
+	for(i=0; i< height; i++){
+		for(j=0; j< width;j++){
+			tmp =  img[width * i + j];
+			imgDisplay(j, i, 0) = tmp;
+			imgDisplay(j, i, 1) = tmp;
+			imgDisplay(j, i, 2) = tmp;
+		}
+	}
+
+	
+	if (wait){
+
+		CImgDisplay disp(imgDisplay,title);
+
+		while (!disp.is_closed()) {
+			disp.wait();
+		}
+	}
 }
 
 int main()
 {
 	// Cargamos la imagen original
-	//CImg<float> image("img/fing.pgm");
 	CImg<float> image("img/fing.pgm");
 	//CImg<float> image("img/fing_xl.pgm");
 
@@ -216,79 +253,24 @@ int main()
 	unsigned int img_matrix_size = width * height * sizeof(float);
 	float* img_matrix = image.data();
 	
-
-	/**
-	 * Parte 1 - Secuencial
-	 */
-	
-	// Creo la matriz a retornar 
-	float* matrizVoronoi = (float*) malloc(sizeof(float) * width * height);
-	int ventana = (int) MASKSIZE / 2; // para obtener hacia los costados
-
-	// Recorro toda la imagen
-	for (int fila = 0; fila < height; fila++) {
-		for (int columna = 0; columna < width; columna++) {
-			int cantPixeles = 0;
-			float sumaColoresPixeles = 0;
-			// Recorro la ventana para obtener el promedio
-			int inicioX = columna - ventana;
-			int inicioY = fila - ventana;
-			int finX =  columna + ventana;
-			int finY = fila + ventana;
-			int x,y;
-			// Recorro por ventana
-			for (x = inicioX; x < finX; x++) {
-				for (y = inicioY; y < finY; y++) {
-					// Para filtar los bordes de la imagen
-					if ( (x >= 0) && (x < width) && (y >= 0) && (y < height)) {
-						 cantPixeles++;
-						 sumaColoresPixeles += img_matrix[y * width + x];
-					}
-				}
-			}
-			// Cargo a cada centro el promedio
-			matrizVoronoi[fila * width + columna] = sumaColoresPixeles / cantPixeles;
-		}
-	}
-	
-	// Imagen resultante
 	float tmp;
-	CImg<float> result(width,height,1, 3, 1);
-	for(int i = 0; i < height; i++){
-		for(int j = 0; j < width; j++){
-			tmp =  matrizVoronoi[width * i + j];
-			result(j, i, 0) = tmp;
-			result(j, i, 1) = tmp;
-			result(j, i, 2) = tmp;
-		}
-	}
 
-	CImgDisplay main_disp(image,"FingOriginal");
-	CImgDisplay secuencial(result,"Secuencial");
-		
-	// Hasta que no se cierre la imagen original mostrar las 2 imagenes
-	while (!main_disp.is_closed()) {
-		main_disp.wait();
-	}
+	// ****************** PARTE 1 ********************** //
 
-	/**
-	 * FIN Parte 1 - Secuencial
-	 */
+	float *matrizVoronoi = (float*)malloc(img_matrix_size);
+	float *output_parte1 = (float*) malloc(img_matrix_size);
 
+	kernelParte1_Secuencial(img_matrix, output_parte1, width, height);
 
-	/**
-	 * Parte 2 
-	 */
-	
-	// PREPARO TEST
-
-	// float* testAVG = testear(img_matrix, width, height, MASKSIZE);
+	// ****************** PARTE 2 ********************** //
 
 	// RESERVA DE MEMORIA
 
 	float* input_img_parte2_dev;
 	float* output_img_parte2_dev;
-
+	float* output_parte2 = (float*)malloc(img_matrix_size);
+	
+	
 	cudaMalloc(&input_img_parte2_dev, img_matrix_size);
 	cudaMalloc(&output_img_parte2_dev, img_matrix_size);
 
@@ -300,101 +282,79 @@ int main()
 	dim3 gridDimension( (int)(width / CHUNK) + (width % CHUNK == 0 ? 0 : 1), (int)(height / CHUNK ) + (height % CHUNK == 0 ? 0 : 1) );
 	dim3 blockDimension(CHUNK, CHUNK);
 
-	printf("Imagen %d x %d\n",width,height);
-
 	kernelParte2 <<< gridDimension, blockDimension>>>(input_img_parte2_dev, output_img_parte2_dev, width, height);
-	gpuErrchk( cudaPeekAtLastError() );
-	gpuErrchk( cudaDeviceSynchronize() );
-	//cudaCheck();
-	//cudaDeviceSynchronize();
+	cudaCheck();
+	cudaDeviceSynchronize();
+	cudaMemcpy(output_parte2, output_img_parte2_dev, img_matrix_size, cudaMemcpyDeviceToHost);
 
-	float* img_matrix_parte2_output = (float*)malloc(img_matrix_size);
-	gpuErrchk(cudaMemcpy(img_matrix_parte2_output,output_img_parte2_dev, img_matrix_size, cudaMemcpyDeviceToHost));
-	
-	CImgDisplay parte2(result,"Parte2");
-	while (!parte2.is_closed()) {
-		parte2.wait();
-	}
-
-	cudaFree(output_img_parte2_dev);
-	cudaFree(input_img_parte2_dev);	
-
-	 /*
-	 * Fin Parte 2 
-	 */
-
-	/**
-	 * Parte 3
-	 */
+	// *********************** PARTE 3 ************************* //
+	unsigned int centros_size = sizeof(int) * CANT_CENTROS * 2;
 
 	// Sorteamos los centros
+	
 	int* a_centros = sorteoCentros(CANT_CENTROS,width,height);
 
 	// Reservamos memoria
 	float* img_matrix_parte3_output = (float*)malloc( img_matrix_size );
 
-	float* input_img_parte3_dev;
 	float* output_img_parte3_dev;
 	int* a_centros_parte3_dev;
-	unsigned int centros_size = sizeof(int) * CANT_CENTROS * 2;
-
-	cudaMalloc(&input_img_parte3_dev, img_matrix_size);
+	
 	cudaMalloc(&output_img_parte3_dev, img_matrix_size);
 	cudaMalloc(&a_centros_parte3_dev, centros_size);
 
 	cudaMemset(output_img_parte3_dev, 0, img_matrix_size);
 	cudaMemcpy(a_centros_parte3_dev, a_centros, centros_size, cudaMemcpyHostToDevice);
-	cudaMemcpy(input_img_parte3_dev, img_matrix_parte2_output, img_matrix_size, cudaMemcpyHostToDevice);
-	//cudaMemcpy(input_img_parte3_dev, img_matrix, img_matrix_size, cudaMemcpyHostToDevice);
 	
-	//free(img_matrix_parte2_output);
 
 	// Llamamos al otro kernel
 	dim3 gridDimensionParte3( (int)( width / CHUNK) + (width % CHUNK == 0 ? 0 : 1), (int)(height / CHUNK ) + (height % CHUNK == 0 ? 0 : 1) );
 	dim3 blockDimensionParte3(CHUNK, CHUNK);
 
-	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(input_img_parte2_dev, output_img_parte3_dev,a_centros_parte3_dev,CANT_CENTROS,width,height);
+	kernelParte3<<<gridDimensionParte3, blockDimensionParte3>>>(output_img_parte2_dev, output_img_parte3_dev,a_centros_parte3_dev,width,height);
 	cudaCheck();
-	gpuErrchk( cudaPeekAtLastError() );
-	gpuErrchk( cudaDeviceSynchronize() );
-	
+	cudaDeviceSynchronize();
 
 	cudaMemcpy(img_matrix_parte3_output, output_img_parte3_dev, img_matrix_size, cudaMemcpyDeviceToHost);
 	
 	
 
-	// Muestro la imagen de la parte 3
+	// ******************* MUESTRO IMAGENES ***********************
 
-	CImg<float> parte3(width,height,1, 3, 1);
-	for(int i = 0; i < height; i++){
-		for(int j = 0; j < width; j++){
-			tmp =  img_matrix_parte3_output[width * i + j];
-			parte3(j, i, 0) = tmp;
-			parte3(j, i, 1) = tmp;
-			parte3(j, i, 2) = tmp;
-		}
-	}
+	// ORIGINAL
+	//showImage(img_matrix, true, width, height, "ORIGINAL");
 
+	// PARTE-1 , SECUENCIAL
 
-		
-	//result.save_png("resultado.png");
+	//showImage(output_parte1, true, width, height, "PROMEDIO SECUENCIAL");
+
+	// PARTE-2, PROMEDIO
+
+	showImage(output_parte2, true, width, height, "PROMEDIO CUDA");
+
+	// PARTE-3, CENTROS
+
+	showImage(img_matrix_parte3_output, true, width, height, "CENTROS CUDA");
+
+	// LIBERAR MEMORIA
+
+	// PARTE 1
+
+	free(matrizVoronoi);
+	free(output_parte1);
+
+	// PARTE 2
+
+	cudaFree(input_img_parte2_dev);
+	cudaFree(output_img_parte2_dev);
+	free(output_parte2);
+
+	// PARTE 3
 	
-	CImgDisplay parte3_disp(parte3,"Parte3");
-	while (!parte3_disp.is_closed()) {
-		parte3_disp.wait();
-	}
-
-	// Liberamos la memoria 
-	
-
-	/**
-	 * FIN Parte 3
-	 */
-
-	// Liberamos memoria del device
-	cudaFree(input_img_parte3_dev);
 	cudaFree(output_img_parte3_dev);
 	cudaFree(a_centros_parte3_dev);
+
+
 	free(img_matrix_parte3_output);
 	free(a_centros);
 
