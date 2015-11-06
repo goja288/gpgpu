@@ -231,6 +231,20 @@ void cudaCheck()
 	}
 }
 
+__int64 ctr1 = 0, ctr2 = 0, freq = 0;
+
+void clockStart(){
+	QueryPerformanceCounter((LARGE_INTEGER *)&ctr1);
+}
+
+void clockStop(const char * str){
+	
+	QueryPerformanceCounter((LARGE_INTEGER *)&ctr2);
+	QueryPerformanceFrequency((LARGE_INTEGER *)&freq);
+	printf("%s : %fs\n",str,(ctr2 - ctr1) * 1.0 / freq);
+	
+}
+
 void showImage(float* img, int width, int height, char* title){
 	
 	int i, j;
@@ -272,8 +286,9 @@ int main()
 	float *matrizVoronoi = (float*)malloc(img_matrix_size);
 	float *output_parte1 = (float*) malloc(img_matrix_size);
 
+	clockStart();
 	kernelParte1_Secuencial(img_matrix, output_parte1, width, height);
-
+	clockStop("SECUENCIAL: ");
 	// ****************** PARTE 2 ********************** //
 
 	// RESERVA DE MEMORIA
@@ -287,6 +302,7 @@ int main()
 	cudaMalloc(&output_img_parte2_dev, img_matrix_size);
 
 	cudaMemset(output_img_parte2_dev, 0, img_matrix_size);
+	clockStart();
 	cudaMemcpy(input_img_parte2_dev, img_matrix, img_matrix_size, cudaMemcpyHostToDevice);
 
 	// AJUSTE DE INVOCACION
@@ -298,7 +314,7 @@ int main()
 	cudaCheck();
 	cudaDeviceSynchronize();
 	cudaMemcpy(output_parte2, output_img_parte2_dev, img_matrix_size, cudaMemcpyDeviceToHost);
-
+	clockStop("PARTE 2: ");
 	// *********************** PARTE 3 ************************* //
 	unsigned int centros_size = sizeof(int) * CANT_CENTROS * 2;
 
@@ -316,6 +332,7 @@ int main()
 	cudaMalloc(&a_centros_parte3_dev, centros_size);
 
 	cudaMemset(output_img_parte3_dev, 0, img_matrix_size);
+	clockStart();
 	cudaMemcpy(a_centros_parte3_dev, a_centros, centros_size, cudaMemcpyHostToDevice);
 	
 
@@ -328,7 +345,7 @@ int main()
 	cudaDeviceSynchronize();
 
 	cudaMemcpy(img_matrix_parte3_output, output_img_parte3_dev, img_matrix_size, cudaMemcpyDeviceToHost);
-	
+	clockStop("PARTE 3: ");
 	
 
 	// ******************* MUESTRO IMAGENES ***********************
