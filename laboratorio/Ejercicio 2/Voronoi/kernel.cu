@@ -13,7 +13,34 @@ using namespace cimg_library;
 #define MASKSIZE 5
 #define CANT_CENTROS 6000
 
-void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int imgHeight){
+// Asigna centros de forma aleatoria y retorna un array con la posicion de cada uno
+int* sorteoCentros(int cantCentros, int width, int height) {
+	
+	if (cantCentros >= width * height) {	
+		// te fuiste de tema tenes mas centro que pixeles
+		printf("Ehhh mmm te excediste un poco con la cantidad de centros, son mas que pixeles en la imagen \n ");
+		return 0;
+	}
+	else {
+		int* a_centros = (int*)malloc(sizeof(int) * cantCentros * 2);
+		memset(a_centros,0,sizeof(int) * cantCentros * 2);
+		int centroX, centroY;
+
+		for (int i = 0; i < cantCentros; i++) {
+			centroX = (int) (rand() % (width));
+			centroY = (int) (rand() % (height));
+			
+			a_centros[i] = centroX;
+			a_centros[i + cantCentros] = centroY;
+
+		}
+
+		return a_centros;
+	}
+
+}
+
+void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int imgHeight) {
 
 	int ventana = (int) MASKSIZE / 2,// para obtener hacia los costados
 		inicioX,
@@ -25,6 +52,10 @@ void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int
 			fila,
 			columna;
 	float sumaColoresPixeles;
+
+	unsigned int img_matrix_size = imgWidth * imgHeight * sizeof(float);
+	float* outputPromedio = (float*) malloc(img_matrix_size);
+
 	// Recorro toda la imagen
 	for ( fila = 0; fila < imgHeight; fila++) {
 		for ( columna = 0; columna < imgWidth; columna++) {
@@ -45,9 +76,47 @@ void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int
 				}
 			}
 			// Cargo a cada centro el promedio
-			output[fila * imgWidth + columna] = sumaColoresPixeles / (MASKSIZE * MASKSIZE);
+			outputPromedio[fila * imgWidth + columna] = sumaColoresPixeles / (MASKSIZE * MASKSIZE); // Aca obtengo la imagen promedio
 		}
 	}
+
+	// Sorteo los centros
+	int* a_centrosSecuencial = sorteoCentros(CANT_CENTROS, imgWidth, imgHeight);
+
+	int centro,
+		bestX,
+		bestY;
+	float	distanciaActual,
+			tmpOp;
+	float distanciaMinima = INT_MAX;
+
+	for (fila = 0; fila < imgHeight; fila++) {
+		for (columna = 0; columna < imgWidth; columna++) {
+
+			// Me fijo en el pixel que estoy la distancia a cada centro
+			for (centro = 0; centro < CANT_CENTROS; centro++) {
+				x = a_centrosSecuencial[centro];
+				y = a_centrosSecuencial[centro + CANT_CENTROS];
+				tmpOp = (fila-y)*(fila-y) + (columna - x)*(columna - x);
+				distanciaActual = std::sqrt( tmpOp );
+			
+				if ( distanciaActual < distanciaMinima ) {
+					bestX = x;
+					bestY = y;
+					distanciaMinima = distanciaActual;
+				}
+			}
+			distanciaMinima  = INT_MAX;
+
+			// Asigno el color del centro al pixel
+			output[ imgWidth * fila + columna] = outputPromedio[ imgWidth * bestY +  bestX];
+		}
+		
+	}
+
+	// Liberamos la memoria de la imagen promedio
+	free(outputPromedio);
+
 
 }
 
@@ -189,33 +258,7 @@ __global__ void kernelParte3(float* input, float* output, int* a_centros, int wi
 	}
 }
 
-// Retorna un array con la posicion de cada centro
-int* sorteoCentros(int cantCentros, int width, int height) {
-	
-	if (cantCentros >= width * height) {	
-		// te fuiste de tema tenes mas centro que pixeles
-		printf("Ehhh mmm te excediste un poco con la cantidad de centros\n ");
-		return 0;
-	}
-	else {
-		int* a_centros = (int*)malloc(sizeof(int) * cantCentros * 2);
-		memset(a_centros,0,sizeof(int) * cantCentros * 2);
-		int centroX, centroY;
 
-		for (int i = 0; i < cantCentros; i++) {
-			centroX = (int) (rand() % (width));
-			centroY = (int) (rand() % (height));
-			
-			a_centros[i] = centroX;
-			a_centros[i + cantCentros] = centroY;
-
-		}
-
-
-		return a_centros;
-	}
-
-}
 
 /**
  * Funciones auxiliares
@@ -243,28 +286,6 @@ void clockStop(const char * str){
 	QueryPerformanceFrequency((LARGE_INTEGER *)&freq);
 	printf("%s : %fs\n",str,(ctr2 - ctr1) * 1.0 / freq);
 	
-}
-
-void showImage(float* img, int width, int height, char* title){
-	
-	int i, j;
-	CImg<float> imgDisplay(width,height,1, 3, 1);
-	float tmp;
-
-	for(i=0; i< height; i++){
-		for(j=0; j< width;j++){
-			tmp =  img[width * i + j];
-			imgDisplay(j, i, 0) = tmp;
-			imgDisplay(j, i, 1) = tmp;
-			imgDisplay(j, i, 2) = tmp;
-		}
-	}
-
-	CImgDisplay disp(imgDisplay,title);
-
-	while (!disp.is_closed()) {
-		disp.wait();
-	}
 }
 
 int main()
@@ -363,7 +384,7 @@ int main()
 
 	// PARTE-3, CENTROS
 
-	showImage(img_matrix_parte3_output, width, height, "CENTROS CUDA");
+	//showImage(img_matrix_parte3_output, width, height, "CENTROS CUDA");
 
 	// LIBERAR MEMORIA
 

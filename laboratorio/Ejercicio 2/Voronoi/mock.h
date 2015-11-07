@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include "CImg.h"
 
+using namespace cimg_library;
 
 
 void generarMatriz(float* m, int width, int height){
@@ -11,7 +13,6 @@ void generarMatriz(float* m, int width, int height){
 void imprimirMatriz(float* m, int width, int height){
 	int i, j;
 
-	
 	for(j =0; j < height; j++){
 		for(i=0;i < width; i++){
 			fprintf(stderr, "%.2f  ", m[ j*width + i] );
@@ -84,4 +85,26 @@ bool compareArray(float* a1, float* a2, int width, int height){
 	}
 
 	return prom;
+}
+
+ void showImage(float* img, int width, int height, char* title){
+	
+	int i, j;
+	CImg<float> imgDisplay(width,height,1, 3, 1);
+	float tmp;
+
+	for(i=0; i< height; i++){
+		for(j=0; j< width;j++){
+			tmp =  img[width * i + j];
+			imgDisplay(j, i, 0) = tmp;
+			imgDisplay(j, i, 1) = tmp;
+			imgDisplay(j, i, 2) = tmp;
+		}
+	}
+
+	CImgDisplay disp(imgDisplay,title);
+
+	while (!disp.is_closed()) {
+		disp.wait();
+	}
 }
