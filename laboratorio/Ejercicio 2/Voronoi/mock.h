@@ -3,7 +3,6 @@
 
 using namespace cimg_library;
 
-
 void generarMatriz(float* m, int width, int height){
 	for(int i=0; i< width*height; i++){
 		m[i] = 1;

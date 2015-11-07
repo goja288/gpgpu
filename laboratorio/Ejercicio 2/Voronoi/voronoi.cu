@@ -11,7 +11,7 @@ using namespace cimg_library;
 
 #define CHUNK 32
 #define MASKSIZE 5
-#define CANT_CENTROS 6000
+#define CANT_CENTROS 1000
 
 // Asigna centros de forma aleatoria y retorna un array con la posicion de cada uno
 int* sorteoCentros(int cantCentros, int width, int height) {
@@ -40,7 +40,7 @@ int* sorteoCentros(int cantCentros, int width, int height) {
 
 }
 
-void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int imgHeight) {
+void voronoi_CPU(float* img_matrix, float* output, int imgWidth, int imgHeight) {
 
 	int ventana = (int) MASKSIZE / 2,// para obtener hacia los costados
 		inicioX,
@@ -119,6 +119,7 @@ void kernelParte1_Secuencial(float* img_matrix, float* output, int imgWidth, int
 
 
 }
+
 
 __global__ void kernelParte2(float* input, float* ouput, int imgWidth, int imgHeight) {
 
@@ -308,7 +309,7 @@ int main()
 	float *output_parte1 = (float*) malloc(img_matrix_size);
 
 	clockStart();
-	kernelParte1_Secuencial(img_matrix, output_parte1, width, height);
+	voronoi_CPU(img_matrix, output_parte1, width, height);
 	clockStop("SECUENCIAL: ");
 	// ****************** PARTE 2 ********************** //
 
@@ -372,19 +373,19 @@ int main()
 	// ******************* MUESTRO IMAGENES ***********************
 
 	// ORIGINAL
-	//showImage(img_matrix, width, height, "ORIGINAL");
+	showImage(img_matrix, width, height, "Original");
 
 	// PARTE-1 , SECUENCIAL
 
-	//showImage(output_parte1, width, height, "PROMEDIO SECUENCIAL");
+	showImage(output_parte1, width, height, "CPU Voronoi");
 
 	// PARTE-2, PROMEDIO
 
-	//showImage(output_parte2, width, height, "PROMEDIO CUDA");
+	showImage(output_parte2, width, height, "Imagen Promedio");
 
 	// PARTE-3, CENTROS
 
-	//showImage(img_matrix_parte3_output, width, height, "CENTROS CUDA");
+	showImage(img_matrix_parte3_output, width, height, "GPU Voronoi");
 
 	// LIBERAR MEMORIA
 
